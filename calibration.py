@@ -1,10 +1,11 @@
 """
-校准管理：封装零点校准、砝码校准、去皮置零的高级流程。
+会话级操作管理：去皮 / 取消去皮。
 
-设计要点（参照手册 V3.70 第 5.3 节）:
-- 校准指令后模块需约 600ms 去抖采集，期间不应再发其他指令
-- 校准前应停止自动发送模式（发送任意其他有效指令即可终止，参见第 12 条）
-- 校准完成后重新启动自动发送
+设计说明：
+- 硬件级一次性设置（波特率、零点校准、砝码校准等）由专用调试软件完成
+  （见 README "新电子秤初始设置" 一节）。本程序不提供这些功能。
+- 本程序只做每次运行都会做的"会话级"操作：去皮（把当前重量视为零临时基准）。
+  去皮是临时清零（断电丢失），不会改变电子秤的硬件校准参数。
 """
 from __future__ import annotations
 
@@ -17,21 +18,21 @@ from scale_protocol import build_read_weight_cmd
 
 
 class Calibrator:
-    """对 ScaleDriver 的校准操作做高层封装。"""
+    """对 ScaleDriver 的会话级操作（去皮/取消去皮）做高层封装。"""
 
     def __init__(self, driver: ScaleDriver) -> None:
         self.driver = driver
 
-    def _do_calibration(self, send_fn: Callable[[], None], wait_after: float) -> bool:
-        """统一校准流程：停止自动发送 → 发指令 → 等待去抖 → 重新启动自动发送。"""
+    def _do_with_restart(self, action: Callable[[], None], wait_after: float) -> bool:
+        """统一流程：停止自动发送 → 执行动作 → 等待去抖 → 重新启动自动发送。"""
         if not self.driver.is_open:
             return False
         try:
             # 1) 发一个无关指令终止自动发送（手册第 12 条：模块收到其他任意有效指令后自动发送将失效）
             self.driver.send_command(build_read_weight_cmd(self.driver.address))
             time.sleep(0.05)
-            # 2) 发校准指令
-            send_fn()
+            # 2) 执行动作
+            action()
             # 3) 等待模块去抖
             time.sleep(wait_after)
             # 4) 重新启动自动发送
@@ -40,44 +41,16 @@ class Calibrator:
         except (ScaleConnectionError, Exception):
             return False
 
-    def zero_calibrate(self) -> bool:
-        """第 3 条指令：零点校准。"""
-        return self._do_calibration(
-            self.driver.zero_calibrate,
-            wait_after=config.CALIBRATION_WAIT_SECONDS,
-        )
-
-    def weight_calibrate(self, weight_ticks: int) -> bool:
-        """第 6 条指令：砝码校准。weight_ticks = 砝码g / 分辨率g。"""
-        return self._do_calibration(
-            lambda: self.driver.weight_calibrate(weight_ticks),
-            wait_after=config.CALIBRATION_WAIT_SECONDS,
-        )
-
     def tare(self) -> bool:
-        """第 4 条指令：去皮置零。"""
-        if not self.driver.is_open:
-            return False
-        try:
-            self.driver.send_command(build_read_weight_cmd(self.driver.address))
-            time.sleep(0.05)
-            self.driver.tare()
-            time.sleep(config.CALIBRATION_WAIT_SECONDS)
-            self.driver.start_auto_send(mode=1)
-            return True
-        except Exception:
-            return False
+        """第 4 条指令：去皮置零（把当前重量临时设为 0，断电丢失）。"""
+        return self._do_with_restart(
+            self.driver.tare,
+            wait_after=config.CALIBRATION_WAIT_SECONDS,
+        )
 
     def untare(self) -> bool:
-        """第 5 条指令：取消去皮。"""
-        if not self.driver.is_open:
-            return False
-        try:
-            self.driver.send_command(build_read_weight_cmd(self.driver.address))
-            time.sleep(0.05)
-            self.driver.untare()
-            time.sleep(config.CALIBRATION_WAIT_SECONDS)
-            self.driver.start_auto_send(mode=1)
-            return True
-        except Exception:
-            return False
+        """第 5 条指令：取消去皮（恢复去皮前基准）。"""
+        return self._do_with_restart(
+            self.driver.untare,
+            wait_after=config.CALIBRATION_WAIT_SECONDS,
+        )

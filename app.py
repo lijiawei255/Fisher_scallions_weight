@@ -244,26 +244,18 @@ class WeightApp:
                                       font=("仿宋", 11))
         self.status_label.grid(row=0, column=6, padx=5, pady=5)
 
-        # 第 2 行：校准按钮
+        # 第 2 行：去皮操作（运行时可重新去皮，例如换容器后）
         row2 = tk.Frame(settings, bg='#e6f0e6')
         row2.pack(pady=5)
-        tk.Label(row2, text="校准:", bg='#e6f0e6', font=("仿宋", 11)).grid(row=0, column=0, padx=5)
-        self.zero_btn = tk.Button(row2, text="零点校准", command=self.do_zero_calibrate,
+        tk.Label(row2, text="操作:", bg='#e6f0e6', font=("仿宋", 11)).grid(row=0, column=0, padx=5)
+        self.tare_btn = tk.Button(row2, text="去皮（重新置零）", command=self.do_tare,
                                     bg='#7ab07a', fg='white', font=("仿宋", 10, "bold"),
                                     relief=tk.FLAT, padx=10, pady=3, cursor="hand2", state=tk.DISABLED)
-        self.zero_btn.grid(row=0, column=1, padx=5)
-        self.weight_cal_btn = tk.Button(row2, text="砝码校准", command=self.do_weight_calibrate,
-                                          bg='#7ab07a', fg='white', font=("仿宋", 10, "bold"),
-                                          relief=tk.FLAT, padx=10, pady=3, cursor="hand2", state=tk.DISABLED)
-        self.weight_cal_btn.grid(row=0, column=2, padx=5)
-        self.tare_btn = tk.Button(row2, text="去皮", command=self.do_tare,
-                                    bg='#7ab07a', fg='white', font=("仿宋", 10, "bold"),
-                                    relief=tk.FLAT, padx=10, pady=3, cursor="hand2", state=tk.DISABLED)
-        self.tare_btn.grid(row=0, column=3, padx=5)
+        self.tare_btn.grid(row=0, column=1, padx=5)
         self.untare_btn = tk.Button(row2, text="取消去皮", command=self.do_untare,
                                       bg='#7ab07a', fg='white', font=("仿宋", 10, "bold"),
                                       relief=tk.FLAT, padx=10, pady=3, cursor="hand2", state=tk.DISABLED)
-        self.untare_btn.grid(row=0, column=4, padx=5)
+        self.untare_btn.grid(row=0, column=2, padx=5)
 
     # ============= 串口管理 =============
     def refresh_ports(self) -> None:
@@ -324,45 +316,43 @@ class WeightApp:
 
         # UI 更新
         self.connect_btn.config(text="断开", bg='#b34b4b')
-        for btn in (self.zero_btn, self.weight_cal_btn, self.tare_btn, self.untare_btn):
+        for btn in (self.tare_btn, self.untare_btn):
             btn.config(state=tk.NORMAL)
         if self.is_simulate:
             self.status_label.config(text="虚拟测试模式", fg='#2d5e2d')
         else:
             self.status_label.config(text="已连接", fg='#2d5e2d')
 
-        # 自动零点校准
-        if config.AUTO_ZERO_CALIBRATE_ON_CONNECT and not self.is_simulate:
-            self._auto_zero_calibrate_flow()
-        elif self.is_simulate:
-            # 模拟器中也走一遍同样的倒计时流程，便于测试
-            self._auto_zero_calibrate_flow()
+        # 每次连接后自动去皮（把当前重量视为 0 临时基准；适配每次称重前的容器/托盘）
+        if config.AUTO_TARE_ON_CONNECT:
+            self._auto_tare_flow()
 
-    def _auto_zero_calibrate_flow(self) -> None:
-        """连接后自动零点校准流程（可取消）。"""
+    def _auto_tare_flow(self) -> None:
+        """连接后自动去皮流程（可取消）。"""
         dlg = CountdownDialog(
             self.master,
-            title="自动零点校准",
-            message="请确认托盘已清空。\n程序将在倒计时结束后自动校准零点。",
-            seconds=config.AUTO_CAL_COUNTDOWN_SECONDS,
+            title="自动去皮",
+            message=("请确认托盘状态已稳定（空载或带容器均可）。\n"
+                      "程序将在倒计时结束后把当前重量视为 0。"),
+            seconds=config.AUTO_TARE_COUNTDOWN_SECONDS,
         )
         self.master.wait_window(dlg)
         if dlg.cancelled:
-            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接（未校准）"),
+            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接（未去皮）"),
                                        fg='#a97a2d')
             return
         if self.calibrator is None:
             return
-        self.status_label.config(text="零点校准中...", fg='#a97a2d')
+        self.status_label.config(text="去皮中...", fg='#a97a2d')
         self.master.update()
-        ok = self.calibrator.zero_calibrate()
+        ok = self.calibrator.tare()
         if ok:
-            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接 · 已自动零点校准"),
+            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接 · 已去皮"),
                                        fg='#2d5e2d')
         else:
-            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接（校准失败）"),
+            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接（去皮失败）"),
                                        fg='#a94442')
-            messagebox.showwarning("校准失败", "自动零点校准未成功，请手动点击'零点校准'重试。")
+            messagebox.showwarning("去皮失败", "自动去皮未成功，请手动点击'去皮'重试。")
 
     def disconnect(self) -> None:
         if self.driver is not None:
@@ -376,64 +366,27 @@ class WeightApp:
         self.received_data = False
         self.connect_btn.config(text="连接", bg='#5a9e5a')
         self.status_label.config(text="未连接", fg='#a94442')
-        for btn in (self.zero_btn, self.weight_cal_btn, self.tare_btn, self.untare_btn):
+        for btn in (self.tare_btn, self.untare_btn):
             btn.config(state=tk.DISABLED)
 
-    # ============= 校准操作 =============
+    # ============= 会话级操作 =============
     def _ensure_connected(self) -> bool:
         if not self.connected or self.calibrator is None:
             messagebox.showinfo("提示", "请先连接电子秤")
             return False
         return True
 
-    def do_zero_calibrate(self) -> None:
-        if not self._ensure_connected():
-            return
-        if not messagebox.askyesno("零点校准", "请确认托盘已清空。\n是否继续？"):
-            return
-        self.status_label.config(text="零点校准中...", fg='#a97a2d')
-        self.master.update()
-        ok = self.calibrator.zero_calibrate()
-        if ok:
-            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接 · 零点已校准"),
-                                       fg='#2d5e2d')
-            messagebox.showinfo("完成", "零点校准完成")
-        else:
-            self.status_label.config(text="校准失败", fg='#a94442')
-            messagebox.showerror("失败", "零点校准失败，请检查连接")
-
-    def do_weight_calibrate(self) -> None:
-        if not self._ensure_connected():
-            return
-        warn = ("砝码校准会改变电子秤内部校准参数。\n"
-                "请确保已有标准砝码（建议 ≥ 200g）。\n"
-                "如首次使用无砝码，请忽略此功能。\n\n"
-                "请输入砝码实际重量（克）：")
-        val = simpledialog.askfloat("砝码校准", warn,
-                                      initialvalue=config.CAL_WEIGHT_GRAMS,
-                                      minvalue=1.0, maxvalue=2000.0)
-        if val is None:
-            return
-        weight_ticks = int(round(val / config.GRAMS_PER_TICK))
-        self.status_label.config(text="砝码校准中...", fg='#a97a2d')
-        self.master.update()
-        ok = self.calibrator.weight_calibrate(weight_ticks)
-        if ok:
-            self.status_label.config(text=f"已校准 {val:.1f}g", fg='#2d5e2d')
-            messagebox.showinfo("完成", f"砝码校准完成（{val:.1f} g）\n请取下砝码")
-        else:
-            self.status_label.config(text="校准失败", fg='#a94442')
-            messagebox.showerror("失败", "砝码校准失败，请检查连接")
-
     def do_tare(self) -> None:
+        """运行时重新去皮（例如换容器后）。"""
         if not self._ensure_connected():
             return
         if self.calibrator.tare():
-            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已去皮"), fg='#2d5e2d')
+            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已重新去皮"), fg='#2d5e2d')
         else:
             messagebox.showerror("失败", "去皮失败")
 
     def do_untare(self) -> None:
+        """取消去皮，恢复原始读数。"""
         if not self._ensure_connected():
             return
         if self.calibrator.untare():

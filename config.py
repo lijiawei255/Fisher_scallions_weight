@@ -12,16 +12,16 @@ UI_UPDATE_INTERVAL = 100        # 界面刷新周期（ms），与自动发送 1
 MODULE_ADDRESS = 0              # 变送器模块地址（默认 0）
 
 # ============= 校准参数 =============
-# 默认假设电子秤已按 0.1g 分辨率出厂校准；用户无砝码时无需重新校准
-CAL_WEIGHT_GRAMS = 500.0        # 标准砝码实际重量（高级用户用）
-CAL_RESOLUTION_G = 0.1          # 1 个刻度代表的实际重量
-CAL_WEIGHT_TICKS = 5000         # 砝码校准时写入的"刻度值" = 500 / 0.1
+# 默认假设电子秤已通过专用调试软件完成硬件级设置（波特率、零点、砝码校准等一次性操作）
+# 本程序只做会话级操作：每次连接后自动去皮
+CAL_RESOLUTION_G = 0.1          # 1 个刻度代表的实际重量（出厂默认 0.1g 分辨率）
+CAL_WEIGHT_TICKS = 5000         # 砝码校准参考值（500g 砝码 / 0.1g = 5000）— 仅作参考
 GRAMS_PER_TICK = CAL_RESOLUTION_G  # 0.1 g/tick
 
-# 启动时自动零点校准
-AUTO_ZERO_CALIBRATE_ON_CONNECT = True   # 连接成功后自动零点校准
-AUTO_CAL_COUNTDOWN_SECONDS = 3          # 倒计时秒数（可手动取消）
-CALIBRATION_WAIT_SECONDS = 0.8          # 校准指令后等待模块去抖采集的秒数
+# 启动时自动去皮
+AUTO_TARE_ON_CONNECT = True        # 连接成功后自动去皮（每次运行都会执行）
+AUTO_TARE_COUNTDOWN_SECONDS = 3    # 倒计时秒数（可手动取消）
+CALIBRATION_WAIT_SECONDS = 0.8     # 校准指令后等待模块去抖采集的秒数
 
 # ============= 称重业务参数 =============
 WEIGHT_THRESH_HIGH = 5.0        # 推板启动阈值（g）
