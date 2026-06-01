@@ -420,9 +420,12 @@ class WeightApp:
                 filtered = self.filter.update(grams)
                 self.last_filtered_grams = filtered
                 self.received_data = True
-                # 状态机
-                self.accumulator.update(filtered)
-                # 稳定判定
+                # 状态机（先于稳定判定，使得"物品离开"事件能立即重置显示）
+                event = self.accumulator.update(filtered)
+                if event is not None:
+                    # 物品离开托盘：立即把显示强制归零（不等 0g 重新稳定）
+                    self.stable_judge.force_set(0.0)
+                # 稳定判定：跳变时维持旧值，不会逐级显示爬升/下降中间值
                 _, display_val = self.stable_judge.update(filtered)
                 self.last_display_grams = max(0.0, display_val)
 
