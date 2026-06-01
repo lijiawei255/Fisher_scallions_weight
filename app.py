@@ -165,11 +165,22 @@ class WeightApp:
         self.bg_canvas.place(x=0, y=0, relwidth=1, relheight=1)
         self.particles = [Particle(self.bg_canvas, self.screen_w, self.screen_h) for _ in range(40)]
 
-        # 右上角 LOGO 文字
-        self.bg_canvas.create_text(
-            self.screen_w - 40, 40, text="北京交通大学",
-            font=("FangSong", 22, "bold"), fill="#2d5e2d", anchor="ne"
-        )
+        # 右上角校徽图片
+        try:
+            self.logo_image = tk.PhotoImage(file="校徽.png")
+            # 原图 1142×349，缩放 4 倍后 286×88（保持比例，宽度适合右上角）
+            self.logo_image = self.logo_image.subsample(4, 4)
+            self.bg_canvas.create_image(
+                self.screen_w - 30, 30, image=self.logo_image, anchor="ne"
+            )
+        except Exception as e:
+            # 图片缺失时回退到纯文字
+            self.logo_image = None
+            self.bg_canvas.create_text(
+                self.screen_w - 40, 40, text="北京交通大学",
+                font=("FangSong", 22, "bold"), fill="#2d5e2d", anchor="ne"
+            )
+            print(f"[提示] 校徽图片加载失败，使用纯文字: {e}")
         # 左上角时钟
         self.clock_label_on_canvas = self.bg_canvas.create_text(
             40, 40, text="--:--:--",
