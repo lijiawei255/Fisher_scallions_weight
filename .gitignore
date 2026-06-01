@@ -27,6 +27,12 @@ weight_record_*.txt
 .DS_Store
 Thumbs.db
 
+# 用户截图/录屏
+*.png
+*.jpg
+*.mp4
+校准.png
+
 # 电子秤资料目录中过大的二进制和冗余文件
 电子秤资料/**/操作视频.mp4
 电子秤资料/**/*.exe

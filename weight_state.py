@@ -21,7 +21,6 @@ class WeightAccumulator:
         self.state: str = "IDLE"  # IDLE | WEIGHING
         self.peak_weight: float = 0.0
         self.total_weight: float = 0.0
-        self.event_count: int = 0   # 累计件数（每次物品离场 +1）
         self._enter_streak: int = 0   # 连续高于阈值的次数
         self._exit_streak: int = 0    # 连续低于阈值的次数
         self._last_event: Optional[dict] = None
@@ -56,7 +55,6 @@ class WeightAccumulator:
                     added = int(round(self.peak_weight))
                     if added > 0:
                         self.total_weight += added
-                        self.event_count += 1
                         if self.total_weight > config.MAX_TOTAL_GRAMS:
                             self.total_weight = config.MAX_TOTAL_GRAMS
                         event = {
@@ -76,7 +74,6 @@ class WeightAccumulator:
 
     def clear_total(self) -> None:
         self.total_weight = 0.0
-        self.event_count = 0
         self.state = "IDLE"
         self.peak_weight = 0.0
         self._enter_streak = 0
