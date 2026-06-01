@@ -16,7 +16,9 @@
 """
 from __future__ import annotations
 
+import os
 import random
+import sys
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -33,6 +35,17 @@ from scale_driver import (
 from scale_protocol import weight_ticks_to_grams
 from weight_filter import MovingAverageFilter, StableJudge
 from weight_state import WeightAccumulator
+
+
+# ==================== 资源路径（PyInstaller 兼容）====================
+def resource_path(relative: str) -> str:
+    """获取资源绝对路径。PyInstaller 单文件模式下，资源被解压到 sys._MEIPASS。
+
+    开发环境（直接 python main.py）：返回当前工作目录下的文件
+    打包后（运行 exe）：返回 PyInstaller 解压临时目录下的文件
+    """
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, relative)
 
 
 # ==================== 自动请求管理员权限 ====================
@@ -165,9 +178,10 @@ class WeightApp:
         self.bg_canvas.place(x=0, y=0, relwidth=1, relheight=1)
         self.particles = [Particle(self.bg_canvas, self.screen_w, self.screen_h) for _ in range(40)]
 
-        # 右上角校徽图片
+        # 右上角校徽图片（支持 PyInstaller 打包后的解压目录 sys._MEIPASS）
         try:
-            self.logo_image = tk.PhotoImage(file="校徽.png")
+            logo_path = resource_path("校徽.png")
+            self.logo_image = tk.PhotoImage(file=logo_path)
             # 原图 1142×349，缩放 4 倍后 286×88（保持比例，宽度适合右上角）
             self.logo_image = self.logo_image.subsample(4, 4)
             self.bg_canvas.create_image(
@@ -180,6 +194,7 @@ class WeightApp:
                 self.screen_w - 40, 40, text="北京交通大学",
                 font=("FangSong", 22, "bold"), fill="#2d5e2d", anchor="ne"
             )
+            print(f"[提示] 校徽图片加载失败，使用纯文字: {e}")
             print(f"[提示] 校徽图片加载失败，使用纯文字: {e}")
         # 左上角时钟
         self.clock_label_on_canvas = self.bg_canvas.create_text(

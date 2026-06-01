@@ -208,6 +208,42 @@ Windows 上首次启动会自动以管理员权限重启（UAC 弹窗），以�
 - 背景 `#f4f6fa`（极浅冷灰）/ `#ffffff`（卡片白）
 - 文字 `#0f172a`（主）/ `#475569`（副）/ `#94a3b8`（弱）
 
+### 5.6 打包为单 exe（分发用）
+
+本项目支持用 PyInstaller 打包成单 exe（~11MB），**目标电脑无需安装 Python 或任何依赖**，双击即可运行。
+
+**前提**（开发者机器）：
+- Python 3.8+
+- 已安装 `pip install -r requirements.txt`（含 pyserial）
+- `pip install pyinstaller`（一次）
+- 仓库根目录有 `tubiao.ico`（exe 图标）和 `校徽.png`（运行时显示）
+
+**打包命令**：
+
+```bash
+python build.py
+```
+
+**产物**：`dist/葱称重系统.exe`（约 11 MB，--onefile 模式内置 Python 解释器和所有依赖）
+
+**分发**：
+- 把 `葱称重系统.exe` 单独发给用户即可
+- 目标电脑**不需要**装 Python、不需要装 pyserial
+- 首次双击可能触发 Windows SmartScreen 警告（"未知发布者"），点"更多信息 → 仍要运行"
+- Windows 可能请求管理员权限（UAC），用于全屏与串口访问
+
+**打包脚本**（[build.py](build.py)）做了什么：
+- 清理旧的 `build/` `dist/` `*.spec`
+- 用 `--onefile --windowed` 打包 GUI（无控制台窗口）
+- 用 `--icon tubiao.ico` 设置 exe 图标
+- 用 `--add-data 校徽.png;.` 把校徽嵌入 exe（运行时从 `sys._MEIPASS` 解压目录加载，[app.py](app.py) 的 `resource_path()` 函数处理此逻辑）
+- 输出产物路径 + 大小
+
+**常见问题**：
+- 打包后 exe 启动黑屏闪退 → 缺少 `校徽.png` 或 `tubiao.ico`，把它们放回仓库根目录后重新打包
+- 杀毒软件报毒 → PyInstaller 单 exe 经常被误报，可加入白名单或代码签名
+- 体积太大 → 默认 11MB 是包含完整 Python 解释器的正常大小；如果要更小可用 UPX 压缩（`--upx-dir`）
+
 ---
 
 ## 6. 使用流程（每次运行）
@@ -326,8 +362,9 @@ IDLE ──(连续2次>5g)──> WEIGHING（跟踪 peak）──(连续2次<3g)
 ```
 Fisher_scallions_weight/
 ├── main.py                 # 入口
-├── app.py                  # Tkinter UI
-├── config.py               # 配置常量
+├── app.py                  # Tkinter UI（含 resource_path 兼容 PyInstaller）
+├── build.py                # 打包脚本（PyInstaller 一键打包为单 exe）
+├── config.py               # 配置常量 + THEME 主题
 ├── scale_protocol.py       # 协议层
 ├── scale_driver.py         # 串口/模拟驱动
 ├── weight_filter.py        # 滤波
@@ -337,16 +374,20 @@ Fisher_scallions_weight/
 ├── README.md               # 本文档
 ├── LICENSE                 # MIT
 ├── .gitignore
+├── tubiao.ico              # exe 图标（构建时用，本地资源不入库）
+├── 校徽.png                 # 校徽图片（运行时显示，本地资源不入库）
 ├── weight_system_v2.py     # 历史版本（ASCII 协议，已废弃，保留参考）
-└── 电子秤资料/              # 厂商资料
-    └── 称重变送器模块（TTL自定义协议）资料下载/
-        ├── 电子秤串口模块说明书 V3.70___20240308-已解锁.pdf
-        ├── 调试软件助手 使用说明书20231112-已解锁.pdf
-        ├── 操作视频.mp4
-        ├── 接线说明/
-        ├── 尺寸封装/
-        ├── 驱动文件/CH340驱动/
-        └── 调试软件/调试软件 V3.70.exe  ← 硬件级设置用
+├── 电子秤资料/              # 厂商资料
+│   └── 称重变送器模块（TTL自定义协议）资料下载/
+│       ├── 电子秤串口模块说明书 V3.70___20240308-已解锁.pdf
+│       ├── 调试软件助手 使用说明书20231112-已解锁.pdf
+│       ├── 操作视频.mp4
+│       ├── 接线说明/
+│       ├── 尺寸封装/
+│       ├── 驱动文件/CH340驱动/
+│       └── 调试软件/调试软件 V3.70.exe  ← 硬件级设置用
+└── dist/                   # PyInstaller 产物（不入库）
+    └── 葱称重系统.exe      # ~11 MB，分发给最终用户
 ```
 
 ---
@@ -364,16 +405,23 @@ Fisher_scallions_weight/
   - **显示策略优化**：实时重量只显示"稳定后的最终值"，不再逐级爬升/下降
   - `StableJudge` 重写：跳变时维持旧值，N 次连续稳定后才暴露新值
   - 物品离开时 `force_set(0)` 立即归零（不必等 0g 重新稳定 3 次）
-- **v2.3**（本版）：
-  - **GUI 重设计**：现代企业 SaaS 卡片风（浅色 + 阴影 + 圆角）
-  - **4 张卡片**：当前重量（含进度环+进度条）/ 累计统计 / 设备状态 / 称重记录（新增）
-  - **状态徽章条**：4 个带颜色 chip 的徽章（运行状态/去皮/模式/量程）
-  - **顶栏**：项目标题 + 实时时钟 + 版本号
-  - **数字动画**：`AnimatedNumber` 200ms 平滑过渡
-  - **历史记录**：物品离场自动追加，最多保留 50 条
-  - **设计 token**：`config.THEME` 集中管理所有色值和字体
-  - **ttk.Style 主题化**：`clam` 主题 + 19 个自定义样式
-  - **业务层无改动**：`weight_filter` / `weight_state` / `scale_driver` 保持 v2.2 行为
+- **v2.3**：曾尝试 SaaS 卡片风（4 卡片 + 进度环），已废弃
+- **v2.4**：
+  - 恢复 v2.2 简洁布局（中心大字+底部设置）
+  - 字体升级：数字 Microsoft YaHei 96 bold、中文 FangSong
+  - **修复显示中间值 bug**（移除 v2.3 的 AnimatedNumber 平滑动画）
+  - 状态机徽章：IDLE/WEIGHING 颜色区分
+  - 40 粒子背景 + 左上角实时时钟
+- **v2.5**：
+  - 右上角校徽从纯文字改为图片（`校徽.png` 286×88）
+  - 图片缺失时回退到纯文字 LOGO
+- **v2.6**（本版）：
+  - **PyInstaller 单文件打包**：`build.py` 一键打包为 `dist/葱称重系统.exe`（~11MB）
+  - **资源路径兼容**：`resource_path()` 支持 `sys._MEIPASS`（PyInstaller 单文件解压目录）
+  - **exe 内置** Python 解释器 + pyserial，目标电脑无需装任何依赖
+  - **图标**：`tubiao.ico` 作为 exe 程序图标
+  - 校徽图片作为 `--add-data` 嵌入
+  - .gitignore 加入 `build/` `dist/` `*.spec` `*.ico` 规则
 
 ---
 
