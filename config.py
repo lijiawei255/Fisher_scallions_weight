@@ -42,3 +42,45 @@ SIM_NOISE_GRAMS = 0.0           # 模拟噪声幅度（开发滤波算法用）
 WINDOW_TITLE = "葱称重系统 - 北京交通大学"
 BG_COLOR = '#f0f8f0'
 TOTAL_MAX = MAX_TOTAL_GRAMS     # 兼容旧字段
+
+# ============= 主题色（design tokens）=============
+# 现代化企业 SaaS 卡片风：浅色 + 阴影 + 圆角 + 柔和
+THEME = {
+    # 背景
+    "bg":             "#f4f6fa",  # 主背景（极浅冷灰）
+    "card_bg":        "#ffffff",  # 卡片背景
+    "card_border":    "#e2e8f0",  # 卡片描边
+    "panel_bg":       "#eef2f7",  # 底栏操作区
+    "topbar_bg":      "#ffffff",  # 顶栏
+
+    # 主题色
+    "primary":        "#16a34a",  # 主绿
+    "primary_dark":   "#15803d",
+    "primary_light":  "#dcfce7",
+    "accent":         "#0ea5e9",  # 蓝色点缀
+    "accent_dark":    "#0369a1",
+    "accent_light":   "#e0f2fe",
+
+    # 状态色
+    "success":        "#16a34a",
+    "warning":        "#d97706",
+    "warning_light":  "#fef3c7",
+    "danger":         "#dc2626",
+    "danger_light":   "#fee2e2",
+    "muted":          "#94a3b8",
+    "muted_dark":     "#64748b",
+    "text":           "#0f172a",
+    "text_dim":       "#475569",
+
+    # 尺寸
+    "radius":         16,
+    "card_pad":       24,
+    "shadow_color":   "#0f172a",  # 用于绘制阴影
+
+    # 字体
+    "font_zh":        "Microsoft YaHei",   # 数字/英文
+    "font_cn":        "FangSong",          # 中文标题
+}
+
+# 历史记录区
+HISTORY_MAX_RECORDS = 50  # 内存中保留的最大记录数
