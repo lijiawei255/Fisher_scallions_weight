@@ -572,6 +572,10 @@ class WeightApp:
                     # 物品离场：立即把显示归 0（不显示下降过程）
                     self.stable_judge.force_set(0.0)
                     display_val = 0.0
+                elif (self.accumulator.state == "WEIGHING"
+                      and self.accumulator._locked):
+                    # 锁定后冻结显示：不显示推板下压导致的升高值
+                    display_val = self.accumulator.locked_weight
                 self.last_display_grams = display_val
 
         # 只在稳定值变化时更新 Label（1g 精度，显示整数）

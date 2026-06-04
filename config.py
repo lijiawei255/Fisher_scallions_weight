@@ -29,9 +29,9 @@ WEIGHT_THRESH_HIGH = 5.0  # 推板启动阈值（g）
 WEIGHT_THRESH_LOW = 3.0  # 推板停止阈值（g）
 MAX_TOTAL_GRAMS = 9999.0  # 总重显示上限（g）
 STABLE_THRESH_GRAMS = 1.0  # 稳定判定阈值（1g 分辨率下允许 ±1g 波动）
-STABLE_COUNT_REQUIRED = 3  # 连续 N 次落入阈值才确认稳定
+STABLE_COUNT_REQUIRED = 1  # 硬件已滤波(中值3+平均3)，单次输出可信，加快响应和锁定速度
 ENTER_WEIGHING_STREAK = 2  # 连续 N 次 > 高阈值才进入 WEIGHING（防误触发）
-EXIT_WEIGHING_STREAK = 2  # 连续 N 次 < 低阈值才退出 WEIGHING
+EXIT_WEIGHING_STREAK = 1  # 连续 N 次 < 低阈值才退出 WEIGHING（硬件已滤波，单次可信）
 
 # ============= 模拟模式（虚拟测试） =============
 SIMULATE_MODE_DEFAULT = False  # True 启动时进入虚拟测试模式（无需电子秤）
