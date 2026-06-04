@@ -184,7 +184,11 @@ class ToastManager:
 
 # ==================== 按钮涟漪效果 ====================
 def _create_ripple(btn: tk.Button) -> None:
-    """在按钮位置创建扩散涟漪效果。"""
+    """在按钮位置创建扩散涟漪效果。
+
+    涟漪 Label 会覆盖在按钮上方，截获鼠标释放事件导致 Button.command 不触发。
+    解决方案：绑定鼠标事件到涟漪并转发给按钮，让按钮的 command 正常执行。
+    """
     parent = btn.master
     btn.update_idletasks()
 
@@ -194,6 +198,22 @@ def _create_ripple(btn: tk.Button) -> None:
     # 创建涟漪 Label（初始很小，在按钮中心）
     ripple = tk.Label(parent, bg="#34d399", relief=tk.FLAT, bd=0)
     ripple.place(x=x + w // 2, y=y + h // 2, width=0, height=0)
+
+    # 关键修复：涟漪 Label 截获鼠标事件 → 转发给按钮，保证 command 触发
+    def _forward_to_btn(event, b=btn) -> None:
+        try:
+            b.event_generate(
+                event.type,
+                x=event.x_root - b.winfo_rootx(),
+                y=event.y_root - b.winfo_rooty(),
+                rootx=event.x_root,
+                rooty=event.y_root,
+            )
+        except tk.TclError:
+            pass  # 按钮已销毁
+
+    for ev_type in ("<ButtonRelease-1>", "<Motion>", "<Leave>"):
+        ripple.bind(ev_type, _forward_to_btn)
 
     def animate(step: int = 0) -> None:
         if step >= 10:
