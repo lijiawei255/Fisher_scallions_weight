@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 280" width="700" height="280">
+  <rect width="700" height="280" fill="#ffffff" rx="12"/>
+
+  <text x="350" y="36" text-anchor="middle" font-family="Microsoft YaHei, sans-serif"
+        font-size="18" font-weight="bold" fill="#0f172a">总重累计逻辑</text>
+
+  <!-- 物品1 -->
+  <rect x="60" y="70" width="140" height="160" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="130" y="100" text-anchor="middle" font-family="Microsoft YaHei" font-size="14" font-weight="bold" fill="#16a34a">物品 ①</text>
+  <text x="130" y="130" text-anchor="middle" font-family="Consolas" font-size="24" font-weight="bold" fill="#16a34a">30g</text>
+  <text x="130" y="155" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">放上→稳定→锁定→推走</text>
+  <text x="130" y="175" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">锁定值 = 30g</text>
+
+  <!-- 箭头 -->
+  <text x="230" y="150" text-anchor="middle" font-family="Microsoft YaHei" font-size="24" fill="#16a34a">+</text>
+
+  <!-- 物品2 -->
+  <rect x="260" y="70" width="140" height="160" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="330" y="100" text-anchor="middle" font-family="Microsoft YaHei" font-size="14" font-weight="bold" fill="#16a34a">物品 ②</text>
+  <text x="330" y="130" text-anchor="middle" font-family="Consolas" font-size="24" font-weight="bold" fill="#16a34a">25g</text>
+  <text x="330" y="155" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">放上→稳定→锁定→推走</text>
+  <text x="330" y="175" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">锁定值 = 25g</text>
+
+  <!-- 箭头 -->
+  <text x="430" y="150" text-anchor="middle" font-family="Microsoft YaHei" font-size="24" fill="#16a34a">+</text>
+
+  <!-- 物品3 -->
+  <rect x="460" y="70" width="140" height="160" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="530" y="100" text-anchor="middle" font-family="Microsoft YaHei" font-size="14" font-weight="bold" fill="#16a34a">物品 ③</text>
+  <text x="530" y="130" text-anchor="middle" font-family="Consolas" font-size="24" font-weight="bold" fill="#16a34a">35g</text>
+  <text x="530" y="155" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">放上→稳定→锁定→推走</text>
+  <text x="530" y="175" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">锁定值 = 35g</text>
+
+  <!-- 结果 -->
+  <rect x="100" y="245" width="500" height="28" rx="14" fill="#16a34a"/>
+  <text x="350" y="265" text-anchor="middle" font-family="Microsoft YaHei" font-size="14" font-weight="bold" fill="#ffffff">累计总重 = 30 + 25 + 35 = 90g</text>
+
+</svg>

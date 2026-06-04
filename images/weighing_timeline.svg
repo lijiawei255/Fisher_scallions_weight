@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 340" width="820" height="340">
+  <rect width="820" height="340" fill="#ffffff" rx="12"/>
+
+  <text x="410" y="36" text-anchor="middle" font-family="Microsoft YaHei, sans-serif"
+        font-size="18" font-weight="bold" fill="#0f172a">一次完整称重的时间线</text>
+
+  <!-- 时间轴 -->
+  <line x1="80" y1="200" x2="760" y2="200" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- 阶段圆点 -->
+  <!-- 阶段1 -->
+  <circle cx="130" cy="200" r="16" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="2"/>
+  <text x="130" y="205" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" font-weight="bold" fill="#0ea5e9">1</text>
+  <text x="130" y="165" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" fill="#0ea5e9">托盘空载</text>
+  <text x="130" y="235" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">重量 ≈ 0g</text>
+  <text x="130" y="250" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">IDLE 状态</text>
+
+  <!-- 阶段2 -->
+  <circle cx="280" cy="200" r="16" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="280" y="205" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" font-weight="bold" fill="#16a34a">2</text>
+  <text x="280" y="165" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" fill="#16a34a">放上葱</text>
+  <text x="280" y="235" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">重量跳变 &gt; 2g</text>
+  <text x="280" y="250" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">进入 WEIGHING</text>
+
+  <!-- 阶段3 -->
+  <circle cx="430" cy="200" r="16" fill="#16a34a" stroke="#16a34a" stroke-width="2"/>
+  <text x="430" y="205" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" font-weight="bold" fill="#ffffff">3</text>
+  <text x="430" y="165" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" fill="#16a34a">重量稳定</text>
+  <text x="430" y="235" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">连续N次波动&lt;阈值</text>
+  <text x="430" y="250" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">🔒 锁定重量</text>
+
+  <!-- 阶段4 -->
+  <circle cx="580" cy="200" r="16" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="580" y="205" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" font-weight="bold" fill="#dc2626">4</text>
+  <text x="580" y="165" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" fill="#dc2626">推板推走</text>
+  <text x="580" y="235" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">推板可能下压秤盘</text>
+  <text x="580" y="250" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">但显示值不变 ✓</text>
+
+  <!-- 阶段5 -->
+  <circle cx="720" cy="200" r="16" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="720" y="205" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" font-weight="bold" fill="#b45309">5</text>
+  <text x="720" y="165" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" fill="#b45309">累计总重</text>
+  <text x="720" y="235" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">物品离开秤盘</text>
+  <text x="720" y="250" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#64748b">锁定值加入总重</text>
+
+  <!-- 底部关键说明 -->
+  <rect x="80" y="275" width="660" height="50" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1"/>
+  <text x="410" y="297" text-anchor="middle" font-family="Microsoft YaHei" font-size="13" font-weight="bold" fill="#16a34a">关键：第3步锁定后，第4步推板下压不会影响显示值</text>
+  <text x="410" y="317" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" fill="#16a34a">第5步只用锁定值累计，确保"总重 = 用户看到的所有值之和"</text>
+
+</svg>

@@ -4,7 +4,8 @@
 硬件（CMCU-07）已配置中值滤波(3) + 平均滤波(3)，软件直接使用硬件返回值，
 不再做软件层滤波。
 
-- StableJudge: 连续 N 次变化 < 阈值才确认稳定，避免数字跳变。
+- StableJudge: 跳变时延迟 1 个采样（100ms）确认新值，避免 UI 显示抖动。
+  物品离开时 force_set(0) 强制归零，不显示下降过程。
 """
 from __future__ import annotations
 
@@ -12,25 +13,27 @@ from typing import Tuple
 
 
 class StableJudge:
-    """稳定判定：连续 N 次采样变化 < 阈值才确认稳定值。
+    """稳定判定：跳变时延迟 1 个采样确认新值。
 
-    设计目的：避免 UI 显示重量爬升/下降过程中的中间值。
-    例如放上 30g 物品时，原始读数从 0 爬到 30，跳变前的中间值（5, 10, 15…）
-    都不应被显示；同理物品离开时也不应逐级下降。
+    硬件已做中值+平均滤波，软件拿到的读数已经是干净的一步跳变（0 → 30），
+    不会有逐级爬升的问题。StableJudge 的作用是：
+    - 跳变时：延迟 1 个采样（100ms）确认新值，过滤偶然的瞬时跳变
+    - 确认后：一步更新到新值，不显示中间过渡
+    - force_set(0)：强制归零，用于物品离开或去皮时
 
     用法:
-        judge = StableJudge(thresh=0.5, count_required=3)
+        judge = StableJudge(thresh=1.0, count_required=1)  # 硬件已滤波，1次即可
         for sample in stream:
             is_stable, stable_value = judge.update(sample)
-            # 即使未稳定，也总是返回"当前确认的稳定值"——它在跳变时不变
             display(stable_value)
 
     行为约定:
-        - 跳变时：保持旧稳定值不变（不暴露跳变中间值）
-        - 新值需连续 N 次落在阈值内才被确认为新稳定值
+        - 读数变化 > thresh：保持旧值，将新值设为候选
+        - 候选值连续 N 次（N=1）落在阈值内 → 确认稳定，一步更新
+        - force_set(value)：强制覆盖稳定值（去皮/物品离开时）
     """
 
-    def __init__(self, thresh: float = 0.5, count_required: int = 3) -> None:
+    def __init__(self, thresh: float = 1.0, count_required: int = 1) -> None:
         if count_required < 1:
             raise ValueError("count_required 必须 >= 1")
         self.thresh = float(thresh)
@@ -43,12 +46,9 @@ class StableJudge:
         """返回 (是否刚确认稳定, 当前稳定值)。
 
         行为约定:
-        - 跳变时（与 _stable_value 差 > 阈值）：保持 _stable_value 不变，
-          把 _pending_value 设为新值，_consecutive 重新计数
-        - 后续若新值与 _pending_value 一致（都在新值附近），继续累加
-        - 累加到 N 次：把 _stable_value 平滑到新值（视为已稳定）
-        - 累加过程中若新值再次跳变（既不接近 _stable_value 也不接近 _pending_value），
-          仍保持 _stable_value，把 _pending_value 重置
+        - 首次/重置后：初始化候选值，保持旧稳定值不变（延迟 1 个采样）
+        - 新值在候选值阈值内：累加计数，达到 N 次 → 确认稳定，一步更新
+        - 新值再次跳变：保持旧稳定值，候选值重置为新值
         """
         v = float(value)
         if self._consecutive == 0:
@@ -63,7 +63,7 @@ class StableJudge:
             self._consecutive += 1
             self._pending_value = (self._pending_value * (self._consecutive - 1) + v) / self._consecutive
             if self._consecutive >= self.count_required:
-                # 连续 N 次落在新候选值附近：把 _stable_value 切到新值
+                # 候选值已确认稳定（N=1 时即第 2 次采样确认），一步更新
                 self._stable_value = self._pending_value
                 return True, self._stable_value
             return False, self._stable_value

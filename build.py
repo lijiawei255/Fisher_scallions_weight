@@ -24,7 +24,7 @@ from pathlib import Path
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
-EXE_NAME = "葱称重系统"
+EXE_NAME = "葱称重系统V2"
 ICON_PATH = PROJECT_DIR / "tubiao.ico"
 LOGO_PATH = PROJECT_DIR / "校徽.png"
 

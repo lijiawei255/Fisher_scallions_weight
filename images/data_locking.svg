@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 340" width="820" height="340">
+  <rect width="820" height="340" fill="#ffffff" rx="12"/>
+
+  <text x="410" y="36" text-anchor="middle" font-family="Microsoft YaHei, sans-serif"
+        font-size="18" font-weight="bold" fill="#0f172a">推板下压干扰 → 数据锁定原理</text>
+
+  <!-- 坐标轴 -->
+  <line x1="100" y1="280" x2="760" y2="280" stroke="#64748b" stroke-width="2"/>
+  <line x1="100" y1="60" x2="100" y2="280" stroke="#64748b" stroke-width="2"/>
+  <text x="50" y="170" text-anchor="middle" font-family="Microsoft YaHei" font-size="13" fill="#475569">重量 (g)</text>
+  <text x="755" y="275" text-anchor="end" font-family="Microsoft YaHei" font-size="13" fill="#475569">时间 →</text>
+
+  <!-- 刻度线 -->
+  <line x1="95" y1="240" x2="100" y2="240" stroke="#64748b" stroke-width="1"/>
+  <text x="88" y="244" text-anchor="end" font-family="Microsoft YaHei" font-size="11" fill="#64748b">0</text>
+  <line x1="95" y1="180" x2="100" y2="180" stroke="#64748b" stroke-width="1"/>
+  <text x="88" y="184" text-anchor="end" font-family="Microsoft YaHei" font-size="11" fill="#64748b">30</text>
+
+  <!-- 物品放上台阶段 -->
+  <line x1="140" y1="240" x2="220" y2="240" stroke="#0ea5e9" stroke-width="3"/>
+  <line x1="220" y1="240" x2="260" y2="180" stroke="#0ea5e9" stroke-width="3"/>
+
+  <!-- 稳定区（绿色阴影） -->
+  <rect x="260" y="170" width="100" height="20" rx="4" fill="#dcfce7" opacity="0.7"/>
+  <text x="310" y="162" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" font-weight="bold" fill="#16a34a">稳定 = 30g</text>
+  <line x1="260" y1="180" x2="360" y2="180" stroke="#16a34a" stroke-width="3"/>
+
+  <!-- 数据锁定标记 -->
+  <rect x="260" y="166" width="100" height="2" fill="#16a34a" stroke-dasharray="2,2"/>
+  <text x="310" y="205" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" fill="#16a34a">🔒 锁定重量 = 30g</text>
+
+  <!-- 推板下压阶段（红色上升） -->
+  <line x1="360" y1="180" x2="400" y2="155" stroke="#dc2626" stroke-width="3"/>
+  <line x1="400" y1="155" x2="440" y2="150" stroke="#dc2626" stroke-width="3"/>
+  <rect x="360" y="140" width="100" height="22" rx="4" fill="#fee2e2" opacity="0.8"/>
+  <text x="410" y="155" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" font-weight="bold" fill="#dc2626">推板下压！</text>
+
+  <!-- 锁定后的水平线（绿色，不受推板影响） -->
+  <line x1="360" y1="195" x2="500" y2="195" stroke="#16a34a" stroke-width="2" stroke-dasharray="6,4"/>
+  <text x="430" y="192" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#16a34a">显示值保持 30g 不变</text>
+
+  <!-- 物品被推走，重量下降 -->
+  <line x1="440" y1="150" x2="480" y2="240" stroke="#0ea5e9" stroke-width="3"/>
+  <line x1="480" y1="240" x2="600" y2="240" stroke="#0ea5e9" stroke-width="3"/>
+
+  <!-- 累计事件标记 -->
+  <circle cx="490" cy="250" r="20" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="490" y="254" text-anchor="middle" font-family="Microsoft YaHei" font-size="10" font-weight="bold" fill="#b45309">累计</text>
+  <text x="550" y="254" text-anchor="start" font-family="Microsoft YaHei" font-size="12" fill="#b45309">总重 += 30g ✓</text>
+
+  <!-- 阶段标注 -->
+  <text x="180" y="265" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#475569">①放上</text>
+  <text x="310" y="265" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#16a34a">②稳定锁定</text>
+  <text x="410" y="265" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#dc2626">③推板干扰</text>
+  <text x="540" y="265" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#0ea5e9">④推走累计</text>
+
+  <!-- 底部关键说明 -->
+  <rect x="100" y="295" width="620" height="32" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1"/>
+  <text x="410" y="316" text-anchor="middle" font-family="Microsoft YaHei" font-size="13" font-weight="bold" fill="#16a34a">核心策略：重量稳定后立即锁定，之后推板下压导致的升高值一律忽略，直到物品离开才累计锁定值</text>
+
+</svg>

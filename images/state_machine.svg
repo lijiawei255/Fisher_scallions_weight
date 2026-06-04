@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 300" width="700" height="300">
+  <rect width="700" height="300" fill="#ffffff" rx="12"/>
+
+  <text x="350" y="36" text-anchor="middle" font-family="Microsoft YaHei, sans-serif"
+        font-size="18" font-weight="bold" fill="#0f172a">称重业务状态机</text>
+
+  <!-- IDLE 状态 -->
+  <rect x="60" y="100" width="160" height="80" rx="40" fill="#e2e8f0" stroke="#64748b" stroke-width="2"/>
+  <text x="140" y="140" text-anchor="middle" font-family="Microsoft YaHei" font-size="20" font-weight="bold" fill="#475569">IDLE</text>
+  <text x="140" y="162" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" fill="#64748b">空闲等待</text>
+
+  <!-- WEIGHING 状态 -->
+  <rect x="460" y="100" width="180" height="80" rx="40" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="550" y="136" text-anchor="middle" font-family="Microsoft YaHei" font-size="16" font-weight="bold" fill="#16a34a">WEIGHING</text>
+  <text x="550" y="158" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" fill="#475569">称重中 · 锁定重量</text>
+
+  <!-- IDLE → WEIGHING 箭头 -->
+  <line x1="220" y1="140" x2="455" y2="140" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-g)"/>
+  <rect x="228" y="105" width="216" height="32" rx="6" fill="#16a34a" opacity="0.08"/>
+  <text x="340" y="126" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" font-weight="bold" fill="#16a34a">连续 2 次重量 &gt; 2g（进入）</text>
+
+  <!-- WEIGHING → IDLE 箭头（下方） -->
+  <path d="M 550 180 Q 550 250 340 250 Q 140 250 140 182" fill="none"
+        stroke="#0ea5e9" stroke-width="2" marker-end="url(#arrow-b)"/>
+  <rect x="240" y="225" width="200" height="32" rx="6" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="1"/>
+  <text x="340" y="246" text-anchor="middle" font-family="Microsoft YaHei" font-size="12" font-weight="bold" fill="#0ea5e9">连续 1 次重量 &lt; 2g（退出累计）</text>
+
+  <!-- 循环内的锁定说明 -->
+  <rect x="480" y="185" width="140" height="30" rx="8" fill="#16a34a" opacity="0.12"/>
+  <text x="550" y="205" text-anchor="middle" font-family="Microsoft YaHei" font-size="11" fill="#16a34a">首次稳定即锁定</text>
+
+  <!-- 箭头标记 -->
+  <defs>
+    <marker id="arrow-g" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arrow-b" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9"/>
+    </marker>
+  </defs>
+
+</svg>
