@@ -4,7 +4,7 @@
 - ScaleDriver: 真实硬件，通过 pyserial 收发。
 - SimulatedScaleDriver: 虚拟测试，不打开串口，按周期生成 0/30g 帧。
 
-两者实现同一组方法（open/close/is_open/send_command/read_frame/start_auto_send），
+两者实现同一组方法（open/close/is_open/send_command/read_frames/start_auto_send），
 UI 层无差别使用。
 """
 from __future__ import annotations
@@ -28,10 +28,8 @@ from scale_protocol import (
     build_tare_cmd,
     build_untare_cmd,
     build_weight_calibration_cmd,
-    xor_checksum,
     START_BYTE,
     END_BYTE,
-    FRAME_LENGTH,
     CMD_READ_WEIGHT,
 )
 
@@ -102,23 +100,21 @@ class ScaleDriver:
         except Exception as e:
             raise ScaleConnectionError(f"串口写入失败: {e}") from e
 
-    def read_frame(self) -> Optional[dict]:
-        """读取一帧（如果有）。"""
+    def read_frames(self) -> list[dict]:
+        """读取缓冲区中所有有效帧（处理粘包/多帧到达）。"""
         if not self.is_open:
-            return None
+            return []
         try:
             waiting = self._ser.in_waiting
         except Exception as e:
             raise ScaleConnectionError(f"串口状态查询失败: {e}") from e
         if waiting <= 0:
-            return None
+            return []
         try:
             data = self._ser.read(waiting)
         except Exception as e:
             raise ScaleConnectionError(f"串口读取失败: {e}") from e
-        for frame in self._parser.feed(data):
-            return frame
-        return None
+        return list(self._parser.feed(data))
 
     def flush_buffers(self) -> None:
         """清空串口输入缓冲区和帧解析器（去皮/取消去皮后使用，丢弃旧帧）。"""
@@ -207,17 +203,16 @@ class SimulatedScaleDriver:
         # 模拟器忽略指令，但保留接口兼容
         return
 
-    def read_frame(self) -> Optional[dict]:
+    def read_frames(self) -> list[dict]:
         if not self._open:
-            return None
+            return []
         # 节流：每 ~100ms 返回一帧
         now = time.time()
         if not hasattr(self, "_last_emit") or now - self._last_emit >= 0.1:
             self._last_emit = now
             frame_bytes = self._build_frame(self._current_grams())
-            for f in self._parser.feed(frame_bytes):
-                return f
-        return None
+            return list(self._parser.feed(frame_bytes))
+        return []
 
     def start_auto_send(self, mode: int = 1) -> None:
         return
@@ -250,8 +245,3 @@ def list_serial_ports() -> list[str]:
     return [p.device for p in serial.tools.list_ports.comports()]
 
 
-def create_driver(simulate: bool = False, **kwargs) -> object:
-    """根据 simulate 标志返回真实或模拟驱动。"""
-    if simulate:
-        return SimulatedScaleDriver(**kwargs)
-    return ScaleDriver(**kwargs)

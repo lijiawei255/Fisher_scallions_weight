@@ -25,8 +25,8 @@ AUTO_TARE_COUNTDOWN_SECONDS = 3  # 倒计时秒数（可手动取消）
 CALIBRATION_WAIT_SECONDS = 0.8  # 校准指令后等待模块去抖采集的秒数
 
 # ============= 称重业务参数 =============
-WEIGHT_THRESH_HIGH = 5.0  # 推板启动阈值（g）
-WEIGHT_THRESH_LOW = 3.0  # 推板停止阈值（g）
+WEIGHT_THRESH_HIGH = 2.0  # 进入 WEIGHING 阈值（g）
+WEIGHT_THRESH_LOW = 2.0  # 退出 WEIGHING 阈值（g）
 MAX_TOTAL_GRAMS = 9999.0  # 总重显示上限（g）
 STABLE_THRESH_GRAMS = 1.0  # 稳定判定阈值（1g 分辨率下允许 ±1g 波动）
 STABLE_COUNT_REQUIRED = 1  # 硬件已滤波(中值3+平均3)，单次输出可信，加快响应和锁定速度
@@ -41,7 +41,6 @@ SIM_NOISE_GRAMS = 0.0  # 模拟噪声幅度（开发滤波算法用）
 # ============= UI =============
 WINDOW_TITLE = "葱称重系统 - 北京交通大学"
 BG_COLOR = "#f0f8f0"
-TOTAL_MAX = MAX_TOTAL_GRAMS  # 兼容旧字段
 
 # ============= 主题色（design tokens）=============
 # 现代化企业 SaaS 卡片风：浅色 + 阴影 + 圆角 + 柔和
@@ -78,5 +77,5 @@ THEME = {
     "font_cn": "FangSong",  # 中文标题
 }
 
-# 历史记录区
-HISTORY_MAX_RECORDS = 50  # 内存中保留的最大记录数
+# ============= 连接监控 =============
+CONNECTION_TIMEOUT_SECONDS = 5.0  # 超过此时间未收到数据，视为断开

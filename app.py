@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import random
 import sys
+import threading
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -171,7 +172,6 @@ class WeightApp:
                 font=("FangSong", 22, "bold"), fill="#2d5e2d", anchor="ne"
             )
             print(f"[提示] 校徽图片加载失败，使用纯文字: {e}")
-            print(f"[提示] 校徽图片加载失败，使用纯文字: {e}")
         # 左上角时钟
         self.clock_label_on_canvas = self.bg_canvas.create_text(
             40, 40, text="--:--:--",
@@ -202,6 +202,12 @@ class WeightApp:
 
         # 去皮后跳过旧帧计数
         self._discard_frames = 0
+
+        # 去皮操作状态（后台线程）
+        self._tare_in_progress = False
+
+        # 连接心跳
+        self._last_data_time: float = 0.0
 
         # UI
         self.create_widgets()
@@ -409,6 +415,8 @@ class WeightApp:
         self.last_filtered_grams = 0.0
         self.last_display_grams = 0.0
         self.last_total_grams = 0.0
+        self._discard_frames = 0
+        self._last_data_time = time.time()
         # 立即重置显示
         self.weight_label.config(text="0")
         self.total_label.config(text="累计总重: 0 g")
@@ -441,19 +449,9 @@ class WeightApp:
             self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接（未去皮）"),
                                        fg="#c47a1a")
             return
-        if self.calibrator is None:
-            return
-        self.status_label.config(text="去皮中...", fg="#c47a1a")
-        self.master.update()
-        ok = self.calibrator.tare()
-        if ok:
-            self._reset_after_tare()
-            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接 · 已去皮"),
-                                       fg="#15803d")
-        else:
-            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接（去皮失败）"),
-                                       fg="#a94442")
-            messagebox.showwarning("去皮失败", "自动去皮未成功，请手动点击'去皮'重试。")
+        # 使用后台线程执行去皮，不阻塞 UI
+        # reset_total=True：清除倒计时期间容器重量被误累计到总重的值
+        self._run_calibrator_action("tare", reset_total=True)
 
     def disconnect(self) -> None:
         if self.driver is not None:
@@ -465,6 +463,16 @@ class WeightApp:
         self.calibrator = None
         self.connected = False
         self.received_data = False
+        self._tare_in_progress = False
+        # 重置显示（提示用户数据已失效）
+        self.last_display_grams = 0.0
+        self.last_total_grams = 0.0
+        self._shown_grams = None
+        self.weight_label.config(text="--")
+        self.total_label.config(text="累计总重: -- g")
+        self.state_badge.config(text="●  未连接", fg="#94a3b8")
+        self._prev_state = "DISCONNECTED"
+        # UI
         self.connect_btn.config(text="连接", bg="#5a9e5a", activebackground="#4d8a4d")
         self.status_label.config(text="未连接", fg="#a94442")
         for btn in (self.tare_btn, self.untare_btn):
@@ -478,34 +486,84 @@ class WeightApp:
         return True
 
     def _reset_after_tare(self) -> None:
-        """去皮成功后：重置显示状态 + 跳过旧帧。"""
+        """去皮成功后：重置显示状态 + 跳过旧帧（不清空总重）。"""
         self.stable_judge.force_set(0.0)
-        self.accumulator.clear_total()
         self.last_display_grams = 0.0
-        self.last_total_grams = 0.0
         self._shown_grams = None  # 强制下次刷新 Label
         self._discard_frames = 5  # 跳过前5帧旧数据（约500ms）
         self.weight_label.config(text="0")
-        self.total_label.config(text="累计总重: 0 g")
+
+    def _run_calibrator_action(self, action_name: str, reset_total: bool = False) -> None:
+        """在后台线程执行去皮/取消去皮（避免阻塞 UI）。
+
+        reset_total=True 时，去皮成功后同时清零总重（用于连接时自动去皮）。
+        """
+        if self._tare_in_progress:
+            return
+        if not self._ensure_connected():
+            return
+        self._tare_in_progress = True
+        self._tare_reset_total = reset_total
+        # 禁用操作按钮，显示操作状态
+        for btn in (self.tare_btn, self.untare_btn, self.connect_btn):
+            btn.config(state=tk.DISABLED)
+        action_text = "去皮中..." if action_name == "tare" else "取消去皮中..."
+        self.status_label.config(text=action_text, fg="#c47a1a")
+
+        result_box = {"ok": False}
+
+        def worker():
+            try:
+                if action_name == "tare":
+                    result_box["ok"] = self.calibrator.tare()
+                else:
+                    result_box["ok"] = self.calibrator.untare()
+            except Exception:
+                result_box["ok"] = False
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        self._poll_calibrator_done(t, action_name, result_box)
+
+    def _poll_calibrator_done(self, thread: threading.Thread, action_name: str,
+                              result_box: dict) -> None:
+        """轮询后台线程完成状态，完成后更新 UI。"""
+        if thread.is_alive():
+            self.master.after(50, lambda: self._poll_calibrator_done(
+                thread, action_name, result_box))
+            return
+        self._tare_in_progress = False
+        # 恢复按钮状态
+        for btn in (self.tare_btn, self.untare_btn):
+            btn.config(state=tk.NORMAL)
+        self.connect_btn.config(text="断开", bg="#c0392b", activebackground="#a93226")
+
+        if result_box["ok"]:
+            if action_name == "tare":
+                self._reset_after_tare()
+                if self._tare_reset_total:
+                    self.accumulator.clear_total()
+                    self.last_total_grams = 0.0
+                    self.total_label.config(text="累计总重: 0 g")
+                self.status_label.config(
+                    text="虚拟测试模式" if self.is_simulate else "已重新去皮",
+                    fg="#15803d")
+            else:
+                self.status_label.config(
+                    text="虚拟测试模式" if self.is_simulate else "已取消去皮",
+                    fg="#c47a1a")
+        else:
+            action_cn = "去皮" if action_name == "tare" else "取消去皮"
+            self.status_label.config(
+                text="虚拟测试模式" if self.is_simulate else "已连接",
+                fg="#15803d")
+            messagebox.showerror("失败", f"{action_cn}失败")
 
     def do_tare(self) -> None:
-        if not self._ensure_connected():
-            return
-        if self.calibrator.tare():
-            self._reset_after_tare()
-            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已重新去皮"),
-                                       fg="#15803d")
-        else:
-            messagebox.showerror("失败", "去皮失败")
+        self._run_calibrator_action("tare")
 
     def do_untare(self) -> None:
-        if not self._ensure_connected():
-            return
-        if self.calibrator.untare():
-            self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已取消去皮"),
-                                       fg="#c47a1a")
-        else:
-            messagebox.showerror("失败", "取消去皮失败")
+        self._run_calibrator_action("untare")
 
     def clear_total(self) -> None:
         if self.connected and self.received_data:
@@ -527,28 +585,26 @@ class WeightApp:
         self.master.after(1000, self.update_clock)
 
     def update_display(self) -> None:
-        """读取一帧 → 稳定判定 → 状态机 → 更新显示。
+        """读取所有帧 → 稳定判定 → 状态机 → 更新显示。
 
         硬件已配置中值滤波(3) + 平均滤波(3)，软件直接使用返回值。
         管道：硬件输出 → 稳定判定 → 显示
         总重累计：使用显示值（而非峰值），保证"总重 = 用户看到的值之和"
         显示精度：1g 分辨率，显示整数
         """
-        if self.connected and self.driver is not None:
+        if self.connected and self.driver is not None and not self._tare_in_progress:
             try:
-                frame = self.driver.read_frame()
+                frames = self.driver.read_frames()
             except ScaleConnectionError as e:
-                self.disconnect()
-                messagebox.showerror("串口错误", f"与设备的连接已丢失：{e}")
+                self._connection_lost(str(e))
                 self.master.after(config.UI_UPDATE_INTERVAL, self.update_display)
                 return
 
-            if frame is not None:
+            for frame in frames:
                 # 去皮后跳过旧帧（串口缓冲区残留的去皮前数据）
                 if self._discard_frames > 0:
                     self._discard_frames -= 1
-                    self.master.after(config.UI_UPDATE_INTERVAL, self.update_display)
-                    return
+                    continue
 
                 grams = weight_ticks_to_grams(
                     frame["weight_ticks"],
@@ -558,6 +614,7 @@ class WeightApp:
                 self.last_raw_grams = grams
                 self.last_filtered_grams = grams  # 硬件已滤波，直接使用
                 self.received_data = True
+                self._last_data_time = time.time()
                 # 稳定判定
                 _, display_val = self.stable_judge.update(grams)
                 display_val = max(0.0, display_val)
@@ -572,6 +629,15 @@ class WeightApp:
                     # 锁定后冻结显示：不显示推板下压导致的升高值
                     display_val = self.accumulator.locked_weight
                 self.last_display_grams = display_val
+
+            # 连接心跳检测：超过 N 秒未收到任何数据，视为断开
+            if self.received_data and self._last_data_time > 0:
+                elapsed = time.time() - self._last_data_time
+                if elapsed > config.CONNECTION_TIMEOUT_SECONDS:
+                    self._connection_lost("超过 {} 秒未收到数据，连接可能已断开".format(
+                        int(config.CONNECTION_TIMEOUT_SECONDS)))
+                    self.master.after(config.UI_UPDATE_INTERVAL, self.update_display)
+                    return
 
         # 只在稳定值变化时更新 Label（1g 精度，显示整数）
         if self.last_display_grams != getattr(self, "_shown_grams", None):
@@ -591,6 +657,14 @@ class WeightApp:
             self._prev_state = new_state
 
         self.master.after(config.UI_UPDATE_INTERVAL, self.update_display)
+
+    def _connection_lost(self, reason: str) -> None:
+        """连接丢失处理：断开并提示用户。"""
+        self.disconnect()
+        messagebox.showerror(
+            "连接断开",
+            f"与电子秤的连接已断开：\n{reason}\n\n请检查 USB 连接后重新点击「连接」。"
+        )
 
     def _update_state_badge(self, state: str) -> None:
         if state == "WEIGHING":

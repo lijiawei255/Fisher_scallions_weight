@@ -63,7 +63,7 @@ class Calibrator:
             self.driver.flush_buffers()
 
             return True
-        except (ScaleConnectionError, Exception):
+        except Exception:
             return False
 
     def tare(self) -> bool:
