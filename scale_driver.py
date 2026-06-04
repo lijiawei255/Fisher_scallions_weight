@@ -120,6 +120,15 @@ class ScaleDriver:
             return frame
         return None
 
+    def flush_buffers(self) -> None:
+        """清空串口输入缓冲区和帧解析器（去皮/取消去皮后使用，丢弃旧帧）。"""
+        if self._ser is not None and self._ser.is_open:
+            try:
+                self._ser.reset_input_buffer()
+            except Exception:
+                pass
+        self._parser.reset()
+
     # ---- 模式 ----
     def start_auto_send(self, mode: int = 1) -> None:
         """启动自动发送模式（手册第 12 条）。"""
@@ -212,6 +221,10 @@ class SimulatedScaleDriver:
 
     def start_auto_send(self, mode: int = 1) -> None:
         return
+
+    def flush_buffers(self) -> None:
+        """模拟器无缓冲区，仅重置帧解析器以保持接口兼容。"""
+        self._parser.reset()
 
     def zero_calibrate(self) -> None:
         # 模拟器中"校准"等价于把基线归零

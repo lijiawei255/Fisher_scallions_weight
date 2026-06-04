@@ -24,19 +24,44 @@ class Calibrator:
         self.driver = driver
 
     def _do_with_restart(self, action: Callable[[], None], wait_after: float) -> bool:
-        """统一流程：停止自动发送 → 执行动作 → 等待去抖 → 重新启动自动发送。"""
+        """统一流程：停止自动发送 → 排空 → 执行动作 → 等待 → 多重排空 → 重启。
+
+        关键：硬件执行去皮/取消去皮需要约 600ms 去抖采集。在此期间及之前
+        产生的旧帧会残留在串口缓冲区，必须在重启自动发送后彻底丢弃。
+        """
         if not self.driver.is_open:
             return False
         try:
             # 1) 发一个无关指令终止自动发送（手册第 12 条：模块收到其他任意有效指令后自动发送将失效）
             self.driver.send_command(build_read_weight_cmd(self.driver.address))
-            time.sleep(0.05)
-            # 2) 执行动作
+            time.sleep(0.1)
+
+            # 2) 排空：丢弃停止自动发送期间可能残留的帧
+            self.driver.flush_buffers()
+
+            # 3) 执行动作（去皮/取消去皮）
             action()
-            # 3) 等待模块去抖
+
+            # 4) 等待模块去抖采集（手册：约 600ms）
             time.sleep(wait_after)
-            # 4) 重新启动自动发送
+
+            # 5) 排空：丢弃动作期间产生的旧帧
+            self.driver.flush_buffers()
+
+            # 6) 短暂等待，让传输中的字节到达主机
+            time.sleep(0.1)
+
+            # 7) 再次排空：捕获步骤 5-6 之间到达的残留字节
+            self.driver.flush_buffers()
+
+            # 8) 重新启动自动发送（发两次确保生效）
             self.driver.start_auto_send(mode=1)
+            time.sleep(0.05)
+            self.driver.start_auto_send(mode=1)
+
+            # 9) 最终排空：丢弃自动发送命令本身的响应帧
+            self.driver.flush_buffers()
+
             return True
         except (ScaleConnectionError, Exception):
             return False

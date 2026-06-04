@@ -48,29 +48,6 @@ def resource_path(relative: str) -> str:
     return os.path.join(base, relative)
 
 
-# ==================== 自动请求管理员权限 ====================
-def is_admin() -> bool:
-    try:
-        import ctypes
-        return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except Exception:
-        return False
-
-
-def run_as_admin() -> None:
-    if is_admin():
-        return
-    try:
-        import ctypes
-        import sys
-        ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", sys.executable, " ".join(sys.argv), None, 1
-        )
-        sys.exit()
-    except Exception as e:
-        print(f"无法获取管理员权限: {e}")
-
-
 # ==================== 粒子装饰（背景）====================
 class Particle:
     def __init__(self, canvas: tk.Canvas, width: int, height: int) -> None:
@@ -163,9 +140,8 @@ class WeightApp:
     def __init__(self, master: tk.Tk) -> None:
         self.master = master
         master.title(config.WINDOW_TITLE)
-        master.attributes('-fullscreen', True)
-        master.bind("<Escape>", self.toggle_fullscreen)
-        self.is_fullscreen = True
+        # 最大化窗口（非全屏）
+        master.state('zoomed')
 
         self.screen_w = master.winfo_screenwidth()
         self.screen_h = master.winfo_screenheight()
@@ -224,6 +200,9 @@ class WeightApp:
         # 状态机状态徽章用
         self._prev_state = "IDLE"
 
+        # 去皮后跳过旧帧计数
+        self._discard_frames = 0
+
         # UI
         self.create_widgets()
 
@@ -234,9 +213,6 @@ class WeightApp:
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     # ============= UI =============
-    def toggle_fullscreen(self, event=None) -> None:
-        self.is_fullscreen = not self.is_fullscreen
-        self.master.attributes('-fullscreen', self.is_fullscreen)
 
     def create_widgets(self) -> None:
         """整体布局：
@@ -471,6 +447,7 @@ class WeightApp:
         self.master.update()
         ok = self.calibrator.tare()
         if ok:
+            self._reset_after_tare()
             self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已连接 · 已去皮"),
                                        fg="#15803d")
         else:
@@ -500,10 +477,22 @@ class WeightApp:
             return False
         return True
 
+    def _reset_after_tare(self) -> None:
+        """去皮成功后：重置显示状态 + 跳过旧帧。"""
+        self.stable_judge.force_set(0.0)
+        self.accumulator.clear_total()
+        self.last_display_grams = 0.0
+        self.last_total_grams = 0.0
+        self._shown_grams = None  # 强制下次刷新 Label
+        self._discard_frames = 5  # 跳过前5帧旧数据（约500ms）
+        self.weight_label.config(text="0")
+        self.total_label.config(text="累计总重: 0 g")
+
     def do_tare(self) -> None:
         if not self._ensure_connected():
             return
         if self.calibrator.tare():
+            self._reset_after_tare()
             self.status_label.config(text=("虚拟测试模式" if self.is_simulate else "已重新去皮"),
                                        fg="#15803d")
         else:
@@ -555,6 +544,12 @@ class WeightApp:
                 return
 
             if frame is not None:
+                # 去皮后跳过旧帧（串口缓冲区残留的去皮前数据）
+                if self._discard_frames > 0:
+                    self._discard_frames -= 1
+                    self.master.after(config.UI_UPDATE_INTERVAL, self.update_display)
+                    return
+
                 grams = weight_ticks_to_grams(
                     frame["weight_ticks"],
                     frame["sign"],
