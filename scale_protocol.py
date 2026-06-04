@@ -30,13 +30,6 @@ CMD_QUERY_PARAMS    = 0xF2   # 第 10 条：查询参数
 CMD_RESET           = 0x51   # 第 11 条：恢复出厂
 CMD_AUTO_SEND       = 0xA4   # 第 12 条：启动自动发送
 
-# 自动发送模式 1（100ms 间隔）的"前 4 字节"模式
-# A4 00 A3 A5 A2（手册明确给出）
-CMD_AUTO_SEND_MODE1 = bytes([0xA4, 0x00, 0xA3, 0xA5, 0xA2])
-# 模式 2 字节顺序不同
-CMD_AUTO_SEND_MODE2 = bytes([0xA4, 0x00, 0xA5, 0xA3, 0xA2])
-
-
 # ============= 工具函数 =============
 def xor_checksum(bs: bytes) -> int:
     """异或校验（手册第 1 条指令：E=A^B^C^D）。"""

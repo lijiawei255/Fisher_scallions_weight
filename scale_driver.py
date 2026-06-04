@@ -54,7 +54,6 @@ class ScaleDriver:
         self.address = address
         self._ser: Optional["serial.Serial"] = None
         self._parser = FrameParser()
-        self._in_calibration = False
 
     # ---- 生命周期 ----
     def open(self) -> None:
@@ -129,11 +128,7 @@ class ScaleDriver:
 
     # ---- 校准方法（封装在驱动层方便调用） ----
     def zero_calibrate(self) -> None:
-        self._in_calibration = True
-        try:
-            self.send_command(build_zero_calibration_cmd(self.address))
-        finally:
-            self._in_calibration = False
+        self.send_command(build_zero_calibration_cmd(self.address))
 
     def tare(self) -> None:
         self.send_command(build_tare_cmd(self.address))
@@ -142,11 +137,7 @@ class ScaleDriver:
         self.send_command(build_untare_cmd(self.address))
 
     def weight_calibrate(self, weight_ticks: int) -> None:
-        self._in_calibration = True
-        try:
-            self.send_command(build_weight_calibration_cmd(weight_ticks, self.address))
-        finally:
-            self._in_calibration = False
+        self.send_command(build_weight_calibration_cmd(weight_ticks, self.address))
 
 
 # ============= 模拟驱动 =============

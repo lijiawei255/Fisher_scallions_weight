@@ -1,36 +1,14 @@
 """
-滤波层：滑动平均 + 稳定值判定。
+稳定值判定。
 
-- MovingAverageFilter: deque 实现，超出窗口后丢弃最旧。
+硬件（CMCU-07）已配置中值滤波(3) + 平均滤波(3)，软件直接使用硬件返回值，
+不再做软件层滤波。
+
 - StableJudge: 连续 N 次变化 < 阈值才确认稳定，避免数字跳变。
 """
 from __future__ import annotations
 
-import collections
 from typing import Tuple
-
-
-class MovingAverageFilter:
-    """滑动平均滤波。"""
-
-    def __init__(self, window_size: int = 5) -> None:
-        if window_size < 1:
-            raise ValueError("window_size 必须 >= 1")
-        self._buf: collections.deque = collections.deque(maxlen=window_size)
-        self.window_size = window_size
-
-    def update(self, value: float) -> float:
-        self._buf.append(float(value))
-        if not self._buf:
-            return 0.0
-        return sum(self._buf) / len(self._buf)
-
-    def reset(self) -> None:
-        self._buf.clear()
-
-    @property
-    def filled(self) -> bool:
-        return len(self._buf) >= self.window_size
 
 
 class StableJudge:

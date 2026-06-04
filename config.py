@@ -15,9 +15,9 @@ MODULE_ADDRESS = 0  # 变送器模块地址（默认 0）
 # ============= 校准参数 =============
 # 默认假设电子秤已通过专用调试软件完成硬件级设置（波特率、零点、砝码校准等一次性操作）
 # 本程序只做会话级操作：每次连接后自动去皮
-CAL_RESOLUTION_G = 0.1  # 1 个刻度代表的实际重量（出厂默认 0.1g 分辨率）
-CAL_WEIGHT_TICKS = 5000  # 砝码校准参考值（500g 砝码 / 0.1g = 5000）— 仅作参考
-GRAMS_PER_TICK = CAL_RESOLUTION_G  # 0.1 g/tick
+CAL_RESOLUTION_G = 1.0  # 1 个刻度代表的实际重量（500g 砝码输入 500 → 1g/刻度）
+CAL_WEIGHT_TICKS = 500  # 砝码校准参考值（500g 砝码 / 1g = 500）— 仅作参考
+GRAMS_PER_TICK = CAL_RESOLUTION_G  # 1.0 g/tick
 
 # 启动时自动去皮
 AUTO_TARE_ON_CONNECT = True  # 连接成功后自动去皮（每次运行都会执行）
@@ -28,8 +28,7 @@ CALIBRATION_WAIT_SECONDS = 0.8  # 校准指令后等待模块去抖采集的秒�
 WEIGHT_THRESH_HIGH = 5.0  # 推板启动阈值（g）
 WEIGHT_THRESH_LOW = 3.0  # 推板停止阈值（g）
 MAX_TOTAL_GRAMS = 9999.0  # 总重显示上限（g）
-FILTER_WINDOW_SIZE = 5  # 滑动滤波窗口（从 1 提升到 5，抗抖）
-STABLE_THRESH_GRAMS = 0.5  # 稳定判定阈值
+STABLE_THRESH_GRAMS = 1.0  # 稳定判定阈值（1g 分辨率下允许 ±1g 波动）
 STABLE_COUNT_REQUIRED = 3  # 连续 N 次落入阈值才确认稳定
 ENTER_WEIGHING_STREAK = 2  # 连续 N 次 > 高阈值才进入 WEIGHING（防误触发）
 EXIT_WEIGHING_STREAK = 2  # 连续 N 次 < 低阈值才退出 WEIGHING

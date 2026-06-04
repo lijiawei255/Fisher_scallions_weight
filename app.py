@@ -3,11 +3,11 @@
 
 适配 1kg 量程 HX711 TTL 变送器电子秤（CMCU-07 协议 V3.70）。
 
-整体布局沿用 v2.2 简洁风格（中心大字 + 底部设置面板），但用更现代的字体
-（数字用 Microsoft YaHei 增强辨识度，中文仍用仿宋）和更协调的配色。
+硬件已配置中值滤波(3) + 平均滤波(3)，软件直接使用返回值，不再做软件层滤波。
+数据管道：硬件输出 → 稳定判定 → 显示
 
 主要功能:
-- 实时重量显示（g，1 位小数）— 稳定后才显示，不显示爬升/下降中间值
+- 实时重量显示（g，整数）— 稳定后才显示，不显示爬升/下降中间值
 - 累计总重 + 清零
 - 串口连接管理（自动发送模式）
 - 连接后自动去皮（3 秒可取消倒计时）
@@ -33,7 +33,7 @@ from scale_driver import (
     list_serial_ports,
 )
 from scale_protocol import weight_ticks_to_grams
-from weight_filter import MovingAverageFilter, StableJudge
+from weight_filter import StableJudge
 from weight_state import WeightAccumulator
 
 
@@ -210,7 +210,8 @@ class WeightApp:
         self.received_data = False
 
         # 业务层
-        self.filter = MovingAverageFilter(window_size=config.FILTER_WINDOW_SIZE)
+        # 硬件已配置中值滤波(3) + 平均滤波(3)，软件直接使用返回值
+        # 管道：硬件输出 → 稳定判定 → 显示
         self.stable_judge = StableJudge(thresh=config.STABLE_THRESH_GRAMS,
                                         count_required=config.STABLE_COUNT_REQUIRED)
         self.accumulator = WeightAccumulator()
@@ -267,7 +268,7 @@ class WeightApp:
         # 巨字（数字用 Microsoft YaHei 加粗，单位用 FangSong）
         big_row = tk.Frame(weight_frame, bg=self.bg_color)
         big_row.pack(pady=10)
-        self.weight_label = tk.Label(big_row, text="0.0",
+        self.weight_label = tk.Label(big_row, text="0",
                                       font=("Microsoft YaHei", 96, "bold"),
                                       bg=self.bg_color, fg="#2d5e2d")
         self.weight_label.pack(side=tk.LEFT, padx=(0, 8))
@@ -277,7 +278,7 @@ class WeightApp:
         # 累计总重 + 清零
         total_frame = tk.Frame(main_frame, bg=self.bg_color)
         total_frame.pack(pady=30)
-        self.total_label = tk.Label(total_frame, text="累计总重: 0.0 g",
+        self.total_label = tk.Label(total_frame, text="累计总重: 0 g",
                                      font=("FangSong", 24),
                                      bg=self.bg_color, fg="#1e4d1e")
         self.total_label.pack(side=tk.LEFT, padx=20)
@@ -426,7 +427,6 @@ class WeightApp:
 
         self.connected = True
         self.received_data = False
-        self.filter.reset()
         self.stable_judge.reset()
         self.accumulator.clear_total()
         self.last_raw_grams = 0.0
@@ -434,8 +434,8 @@ class WeightApp:
         self.last_display_grams = 0.0
         self.last_total_grams = 0.0
         # 立即重置显示
-        self.weight_label.config(text="0.0")
-        self.total_label.config(text="累计总重: 0.0 g")
+        self.weight_label.config(text="0")
+        self.total_label.config(text="累计总重: 0 g")
 
         self.calibrator = Calibrator(self.driver)
 
@@ -522,7 +522,7 @@ class WeightApp:
         if self.connected and self.received_data:
             self.accumulator.clear_total()
             self.last_total_grams = 0.0
-            self.total_label.config(text="累计总重: 0.0 g")
+            self.total_label.config(text="累计总重: 0 g")
         else:
             messagebox.showinfo("提示", "未连接设备或无有效数据，无法清零")
 
@@ -538,10 +538,12 @@ class WeightApp:
         self.master.after(1000, self.update_clock)
 
     def update_display(self) -> None:
-        """读取一帧 → 滤波 → 状态机 → 稳定判定 → 更新显示。
+        """读取一帧 → 稳定判定 → 状态机 → 更新显示。
 
-        关键：只把"稳定值"赋给 self.last_display_grams，每次只在它变化时才
-        更新 Label.config(text=...)——这样不会显示爬升/下降过程中的中间值。
+        硬件已配置中值滤波(3) + 平均滤波(3)，软件直接使用返回值。
+        管道：硬件输出 → 稳定判定 → 显示
+        总重累计：使用显示值（而非峰值），保证"总重 = 用户看到的值之和"
+        显示精度：1g 分辨率，显示整数
         """
         if self.connected and self.driver is not None:
             try:
@@ -559,29 +561,28 @@ class WeightApp:
                     grams_per_tick=config.GRAMS_PER_TICK,
                 )
                 self.last_raw_grams = grams
-                filtered = self.filter.update(grams)
-                self.last_filtered_grams = filtered
+                self.last_filtered_grams = grams  # 硬件已滤波，直接使用
                 self.received_data = True
-                # 状态机
-                event = self.accumulator.update(filtered)
+                # 稳定判定
+                _, display_val = self.stable_judge.update(grams)
+                display_val = max(0.0, display_val)
+                # 状态机：用硬件返回值判阈值，用显示值累计总重
+                event = self.accumulator.update(grams, display_val)
                 if event is not None:
                     # 物品离场：立即把显示归 0（不显示下降过程）
                     self.stable_judge.force_set(0.0)
-                # 稳定判定
-                _, display_val = self.stable_judge.update(filtered)
-                display_val = max(0.0, display_val)
+                    display_val = 0.0
                 self.last_display_grams = display_val
 
-        # ===== 关键修复：只在稳定值变化时更新 Label，避免平滑动画产生中间值 =====
-        # （之前 v2.3 用 AnimatedNumber 平滑，会显示 0→9→15→22→26→30 等中间值）
+        # 只在稳定值变化时更新 Label（1g 精度，显示整数）
         if self.last_display_grams != getattr(self, "_shown_grams", None):
-            self.weight_label.config(text=f"{self.last_display_grams:.1f}")
+            self.weight_label.config(text=f"{int(round(self.last_display_grams))}")
             self._shown_grams = self.last_display_grams
 
-        # 总重：直接显示（每次物品离场时 total_weight 整数跳变，不会有中间值）
+        # 总重：整数显示
         total_now = self.accumulator.total_weight
         if total_now != self.last_total_grams:
-            self.total_label.config(text=f"累计总重: {total_now:.1f} g")
+            self.total_label.config(text=f"累计总重: {int(round(total_now))} g")
             self.last_total_grams = total_now
 
         # 状态机徽章
