@@ -10,6 +10,7 @@ UI 层无差别使用。
 from __future__ import annotations
 
 import math
+import threading
 import time
 from typing import Optional
 
@@ -41,7 +42,11 @@ class ScaleConnectionError(RuntimeError):
 
 # ============= 真实驱动 =============
 class ScaleDriver:
-    """真实串口驱动。"""
+    """真实串口驱动。
+
+    所有串口 I/O 操作通过 _io_lock 保护，防止后台去皮线程和
+    主线程 update_display() 同时读写同一个 serial.Serial 对象。
+    """
 
     def __init__(self, port: str, baud: int = config.SERIAL_BAUDRATE,
                  timeout: float = config.SERIAL_TIMEOUT,
@@ -52,78 +57,102 @@ class ScaleDriver:
         self.address = address
         self._ser: Optional["serial.Serial"] = None
         self._parser = FrameParser()
+        self._io_lock = threading.Lock()  # 保护所有 _ser 串口操作
 
     # ---- 生命周期 ----
     def open(self) -> None:
-        if serial is None:
-            raise ScaleConnectionError("pyserial 未安装，无法连接真实电子秤")
-        if self._ser is not None and self._ser.is_open:
-            return
-        try:
-            self._ser = serial.Serial(
-                port=self.port,
-                baudrate=self.baud,
-                timeout=self.timeout,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-            )
-        except Exception as e:
-            raise ScaleConnectionError(f"无法打开串口 {self.port}: {e}") from e
-        # 清空残留
-        try:
-            self._ser.reset_input_buffer()
-            self._ser.reset_output_buffer()
-        except Exception:
-            pass
-
-    def close(self) -> None:
-        if self._ser is not None:
+        with self._io_lock:
+            if serial is None:
+                raise ScaleConnectionError("pyserial 未安装，无法连接真实电子秤")
+            if self._ser is not None and self._ser.is_open:
+                return
             try:
-                self._ser.close()
+                self._ser = serial.Serial(
+                    port=self.port,
+                    baudrate=self.baud,
+                    timeout=self.timeout,
+                    bytesize=serial.EIGHTBITS,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_ONE,
+                )
+            except Exception as e:
+                raise ScaleConnectionError(f"无法打开串口 {self.port}: {e}") from e
+            # 清空残留
+            try:
+                self._ser.reset_input_buffer()
+                self._ser.reset_output_buffer()
             except Exception:
                 pass
-            self._ser = None
-        self._parser.reset()
+
+    def close(self) -> None:
+        with self._io_lock:
+            if self._ser is not None:
+                try:
+                    # 先尝试清空缓冲区（可能因设备已拔出而失败，不影响关闭流程）
+                    if self._ser.is_open:
+                        try:
+                            self._ser.reset_input_buffer()
+                            self._ser.reset_output_buffer()
+                        except Exception:
+                            pass
+                        self._ser.close()
+                except Exception:
+                    pass
+                # 强制标记为关闭状态，确保 pyserial 不会持有残留句柄
+                try:
+                    self._ser.is_open = False  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+                self._ser = None
+            self._parser.reset()
 
     @property
     def is_open(self) -> bool:
+        # 注意：property 不能直接持锁（可能死锁），但 is_open 只做读判断
+        # 在调用方已持锁或即将持锁的场景下是安全的
         return self._ser is not None and self._ser.is_open
 
     # ---- I/O ----
     def send_command(self, cmd: bytes) -> None:
-        if not self.is_open:
-            raise ScaleConnectionError("串口未打开")
-        try:
-            self._ser.write(cmd)
-            self._ser.flush()
-        except Exception as e:
-            raise ScaleConnectionError(f"串口写入失败: {e}") from e
+        with self._io_lock:
+            if self._ser is None or not self._ser.is_open:
+                raise ScaleConnectionError("串口未打开")
+            try:
+                self._ser.write(cmd)
+                self._ser.flush()
+            except Exception as e:
+                raise ScaleConnectionError(f"串口写入失败: {e}") from e
 
     def read_frames(self) -> list[dict]:
         """读取缓冲区中所有有效帧（处理粘包/多帧到达）。"""
-        if not self.is_open:
-            return []
-        try:
-            waiting = self._ser.in_waiting
-        except Exception as e:
-            raise ScaleConnectionError(f"串口状态查询失败: {e}") from e
-        if waiting <= 0:
-            return []
-        try:
-            data = self._ser.read(waiting)
-        except Exception as e:
-            raise ScaleConnectionError(f"串口读取失败: {e}") from e
-        return list(self._parser.feed(data))
+        with self._io_lock:
+            if self._ser is None or not self._ser.is_open:
+                return []
+            try:
+                waiting = self._ser.in_waiting
+            except Exception as e:
+                # 读取失败时重置解析器，避免残留脏数据
+                self._parser.reset()
+                raise ScaleConnectionError(f"串口状态查询失败: {e}") from e
+            if waiting <= 0:
+                return []
+            try:
+                data = self._ser.read(waiting)
+            except Exception as e:
+                # 读取失败时重置解析器，避免残留脏数据
+                self._parser.reset()
+                raise ScaleConnectionError(f"串口读取失败: {e}") from e
+            return list(self._parser.feed(data))
 
     def flush_buffers(self) -> None:
         """清空串口输入缓冲区和帧解析器（去皮/取消去皮后使用，丢弃旧帧）。"""
-        if self._ser is not None and self._ser.is_open:
-            try:
-                self._ser.reset_input_buffer()
-            except Exception:
-                pass
-        self._parser.reset()
+        with self._io_lock:
+            if self._ser is not None and self._ser.is_open:
+                try:
+                    self._ser.reset_input_buffer()
+                except Exception:
+                    pass
+            self._parser.reset()
 
     # ---- 模式 ----
     def start_auto_send(self, mode: int = 1) -> None:

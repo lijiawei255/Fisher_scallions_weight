@@ -37,9 +37,12 @@ class SmoothNumberAnimator:
 
     def set_value(self, new_target: float) -> None:
         """设置新目标值，自动触发动画。"""
-        # 取消之前的动画
+        # 安全：取消旧动画时 Label 可能已被销毁（主窗口关闭）
         if self._animation_id is not None:
-            self.label.after_cancel(self._animation_id)
+            try:
+                self.label.after_cancel(self._animation_id)
+            except tk.TclError:
+                pass
             self._animation_id = None
 
         self._start_value = self._current_value
@@ -49,13 +52,22 @@ class SmoothNumberAnimator:
         # 如果差异很小，直接显示
         if abs(new_target - self._current_value) < 0.5:
             self._current_value = new_target
-            self.label.config(text=f"{int(new_target)}")
+            try:
+                self.label.config(text=f"{int(new_target)}")
+            except tk.TclError:
+                pass
             return
 
         # 变化瞬间：高亮
-        self.label.config(fg=self.color_active)
+        try:
+            self.label.config(fg=self.color_active)
+        except tk.TclError:
+            return
         if self._settle_timer is not None:
-            self.label.after_cancel(self._settle_timer)
+            try:
+                self.label.after_cancel(self._settle_timer)
+            except tk.TclError:
+                pass
             self._settle_timer = None
         self._settle_timer = self.label.after(self.duration_ms, self._on_settle)
 
@@ -63,8 +75,11 @@ class SmoothNumberAnimator:
 
     def _on_settle(self) -> None:
         """动画结束后恢复稳定颜色。"""
-        self.label.config(fg=self.color_stable)
         self._settle_timer = None
+        try:
+            self.label.config(fg=self.color_stable)
+        except tk.TclError:
+            pass  # 窗口已被销毁
 
     def _animate(self) -> None:
         """动画循环（约 60fps）。"""
@@ -75,7 +90,11 @@ class SmoothNumberAnimator:
         eased = 1 - pow(1 - progress, 3)
         self._current_value = self._start_value + (self._target_value - self._start_value) * eased
 
-        self.label.config(text=f"{int(self._current_value)}")
+        try:
+            self.label.config(text=f"{int(self._current_value)}")
+        except tk.TclError:
+            self._animation_id = None
+            return  # 窗口已被销毁，停止动画
 
         if progress < 1.0:
             self._animation_id = self.label.after(16, self._animate)  # ~60fps

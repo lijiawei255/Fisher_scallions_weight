@@ -79,3 +79,11 @@ THEME = {
 
 # ============= 连接监控 =============
 CONNECTION_TIMEOUT_SECONDS = 5.0  # 超过此时间未收到数据，视为断开
+
+# ============= 瞬时错误容忍 =============
+TRANSIENT_ERROR_THRESHOLD = 3  # 连续 N 次读取失败才判定断开（容忍偶发 USB 抖动）
+
+# ============= 自动重连 =============
+RECONNECT_MAX_RETRIES = 30  # 最大重连尝试次数（约 30×2s = 60s）
+RECONNECT_INTERVAL_MS = 2000  # 重连尝试间隔（毫秒）
+RECONNECT_REFRESH_PORTS = True  # 重连时自动刷新端口列表

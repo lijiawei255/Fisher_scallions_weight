@@ -173,7 +173,11 @@ class ToastManager:
                 self._toasts.remove(toast)
             if not self._toasts:
                 self._y_offset = 20
-            toast.destroy()
+            # 安全销毁：主窗口可能已被关闭
+            try:
+                toast.destroy()
+            except tk.TclError:
+                pass
 
         toast.after(duration, dismiss)
 
@@ -193,7 +197,10 @@ def _create_ripple(btn: tk.Button) -> None:
 
     def animate(step: int = 0) -> None:
         if step >= 10:
-            ripple.destroy()
+            try:
+                ripple.destroy()
+            except tk.TclError:
+                pass  # 窗口已销毁
             return
 
         scale = step / 10
@@ -207,8 +214,11 @@ def _create_ripple(btn: tk.Button) -> None:
         b = int(153 + (244 - 153) * (step / 10))
         color = f"#{r:02x}{g:02x}{b:02x}"
 
-        ripple.config(bg=color)
-        ripple.place(x=new_x, y=new_y, width=new_size, height=new_size)
+        try:
+            ripple.config(bg=color)
+            ripple.place(x=new_x, y=new_y, width=new_size, height=new_size)
+        except tk.TclError:
+            return  # 窗口已销毁，停止动画
 
         parent.after(30, lambda: animate(step + 1))
 
@@ -339,7 +349,11 @@ class CountdownDialog(tk.Toplevel):
         if self._remaining <= 0:
             self.destroy()
             return
-        self._label.config(text=f"倒计时 {self._remaining} 秒...")
+        # 安全检查：窗口可能已被外部销毁（如主窗口关闭）
+        try:
+            self._label.config(text=f"倒计时 {self._remaining} 秒...")
+        except tk.TclError:
+            return  # 窗口已被销毁，停止倒计时
         self._remaining -= 1
         self.after(1000, self._tick)
 
@@ -419,6 +433,15 @@ class WeightApp:
 
         # 连接心跳
         self._last_data_time: float = 0.0
+
+        # 瞬时错误容忍计数器（连续读取失败次数）
+        self._consecutive_errors: int = 0
+
+        # 自动重连状态
+        self._reconnecting: bool = False  # 是否正在自动重连中
+        self._reconnect_attempts: int = 0  # 已尝试重连次数
+        self._reconnect_port: str = ""  # 记住上次连接的端口名
+        self._reconnect_baud: int = 0  # 记住上次连接的波特率
 
         # UI
         self.create_widgets()
@@ -610,10 +633,16 @@ class WeightApp:
             self.port_combo.set('')
 
     def toggle_connection(self) -> None:
+        if self._reconnecting:
+            # 正在自动重连中 → 取消重连，转为手动断开
+            self._reconnecting = False
+            self._reconnect_attempts = 0
+            self.disconnect(manual=True)
+            return
         if not self.connected:
             self.connect()
         else:
-            self.disconnect()
+            self.disconnect(manual=True)
 
     def connect(self) -> None:
         if self.is_simulate:
@@ -634,6 +663,11 @@ class WeightApp:
         try:
             self.driver.open()
         except ScaleConnectionError as e:
+            # 自动重连模式下：连接失败不弹错误提示，继续重连循环
+            if self._reconnecting:
+                self.driver = None
+                self.master.after(config.RECONNECT_INTERVAL_MS, self._try_reconnect)
+                return
             self.toast_manager.show(f"连接失败：{e}", "error")
             self.driver = None
             return
@@ -645,6 +679,7 @@ class WeightApp:
 
         self.connected = True
         self.received_data = False
+        self._consecutive_errors = 0  # 连接成功，重置错误计数
         self.stable_judge.reset()
         self.accumulator.clear_total()
         self.last_raw_grams = 0.0
@@ -658,6 +693,19 @@ class WeightApp:
         self.total_label.config(text="累计总重: 0 g")
 
         self.calibrator = Calibrator(self.driver)
+
+        # 记住连接参数以便自动重连
+        if not self.is_simulate:
+            self._reconnect_port = port
+            self._reconnect_baud = baud
+
+        # 如果是自动重连成功，通知用户
+        if self._reconnecting:
+            self._reconnecting = False
+            self._reconnect_attempts = 0
+            self.toast_manager.show("自动重连成功！", "success")
+            # 重连成功后恢复连接按钮可用性
+            self.connect_btn.config(state=tk.NORMAL)
 
         # UI 更新
         self.connect_btn.config(text="断开")
@@ -690,7 +738,19 @@ class WeightApp:
         # reset_total=True：清除倒计时期间容器重量被误累计到总重的值
         self._run_calibrator_action("tare", reset_total=True)
 
-    def disconnect(self) -> None:
+    def disconnect(self, manual: bool = True) -> None:
+        """断开连接。
+
+        Args:
+            manual: True = 用户主动点击断开，不需要自动重连；
+                    False = 意外断开（设备拔出等），后续会触发自动重连。
+        """
+        # 手动断开时取消自动重连；意外断开时保留重连标记
+        # （注意：意外断开时 _connection_lost() 在 disconnect() 之后设置 _reconnecting）
+        if manual:
+            self._reconnecting = False
+            self._reconnect_attempts = 0
+
         if self.driver is not None:
             try:
                 self.driver.close()
@@ -710,7 +770,7 @@ class WeightApp:
         self.state_badge.config(text="●  未连接", fg="#94a3b8")
         self._prev_state = "DISCONNECTED"
         # UI
-        self.connect_btn.config(text="连接")
+        self.connect_btn.config(text="连接", state=tk.NORMAL)
         _update_button_appearance(self.connect_btn, _PRIMARY, _PRIMARY_DARK, _PRIMARY_DARK)
         self.status_label.config(text="未连接", fg=_DANGER)
         for btn in (self.tare_btn, self.untare_btn):
@@ -765,16 +825,27 @@ class WeightApp:
 
     def _poll_calibrator_done(self, thread: threading.Thread, action_name: str,
                               result_box: dict) -> None:
-        """轮询后台线程完成状态，完成后更新 UI。"""
+        """轮询后台线程完成状态，完成后更新 UI。
+
+        安全：仅在连接仍然有效时恢复操作按钮；若期间连接已断开
+        （如设备拔出触发 _connection_lost），则不做任何 UI 恢复，
+        避免在"未连接"状态下出现"断开"按钮等错误状态。
+        """
         if thread.is_alive():
             self.master.after(50, lambda: self._poll_calibrator_done(
                 thread, action_name, result_box))
             return
         self._tare_in_progress = False
-        # 恢复按钮状态
+
+        # 如果期间连接已断开（设备拔出等），不做 UI 恢复
+        # disconnect() 已经把按钮设为正确状态，这里不应覆盖
+        if not self.connected:
+            return
+
+        # 恢复按钮状态（仅在连接仍然有效时）
         for btn in (self.tare_btn, self.untare_btn):
             btn.config(state=tk.NORMAL)
-        self.connect_btn.config(text="断开")
+        self.connect_btn.config(text="断开", state=tk.NORMAL)
         _update_button_appearance(self.connect_btn, _DANGER, _DANGER_HOVER, _DANGER_DARK)
 
         if result_box["ok"]:
@@ -834,7 +905,15 @@ class WeightApp:
         if self.connected and self.driver is not None and not self._tare_in_progress:
             try:
                 frames = self.driver.read_frames()
+                # 读取成功 → 重置连续错误计数
+                self._consecutive_errors = 0
             except ScaleConnectionError as e:
+                self._consecutive_errors += 1
+                if self._consecutive_errors < config.TRANSIENT_ERROR_THRESHOLD:
+                    # 瞬时错误容忍：连续失败次数未达阈值，暂不判定断开
+                    self.master.after(config.UI_UPDATE_INTERVAL, self.update_display)
+                    return
+                # 连续失败达到阈值，判定连接丢失
                 self._connection_lost(str(e))
                 self.master.after(config.UI_UPDATE_INTERVAL, self.update_display)
                 return
@@ -879,34 +958,109 @@ class WeightApp:
                     return
 
         # 只在稳定值变化时更新 Label（使用平滑动画 + 颜色跟随）
-        if self.last_display_grams != getattr(self, "_shown_grams", None):
-            self.weight_animator.set_value(self.last_display_grams)
-            self._shown_grams = self.last_display_grams
+        # 仅在已连接时更新业务显示，断开后由 disconnect() 设置固定显示
+        if self.connected:
+            if self.last_display_grams != getattr(self, "_shown_grams", None):
+                self.weight_animator.set_value(self.last_display_grams)
+                self._shown_grams = self.last_display_grams
 
-        # 总重：整数显示
-        total_now = self.accumulator.total_weight
-        if total_now != self.last_total_grams:
-            self.total_label.config(text=f"累计总重: {int(round(total_now))} g")
-            self.last_total_grams = total_now
+            # 总重：整数显示
+            total_now = self.accumulator.total_weight
+            if total_now != self.last_total_grams:
+                self.total_label.config(text=f"累计总重: {int(round(total_now))} g")
+                self.last_total_grams = total_now
 
-        # 状态机徽章 + 粒子颜色响应
-        new_state = self.accumulator.state
-        if new_state != self._prev_state:
-            self._update_state_badge(new_state)
-            # 粒子颜色随状态变化
-            for p in self.particles:
-                p.set_active(new_state == "WEIGHING")
-            self._prev_state = new_state
+            # 状态机徽章 + 粒子颜色响应
+            new_state = self.accumulator.state
+            if new_state != self._prev_state:
+                self._update_state_badge(new_state)
+                # 粒子颜色随状态变化
+                for p in self.particles:
+                    p.set_active(new_state == "WEIGHING")
+                self._prev_state = new_state
 
         self.master.after(config.UI_UPDATE_INTERVAL, self.update_display)
 
     def _connection_lost(self, reason: str) -> None:
-        """连接丢失处理：断开并提示用户。"""
-        self.disconnect()
+        """连接丢失处理：断开并启动自动重连。"""
+        # 保存连接参数（disconnect 会清空 driver）
+        port = self._reconnect_port
+        baud = self._reconnect_baud
+
+        # 意外断开（manual=False）→ 不取消自动重连标记
+        self.disconnect(manual=False)
+
+        # 重连期间禁用连接按钮，防止用户手动 connect 导致双重连接
+        self.connect_btn.config(state=tk.DISABLED)
+
         self.toast_manager.show(
-            f"连接断开：{reason}，请检查 USB 连接后重新点击「连接」",
-            "error"
+            f"连接断开：{reason}，正在尝试自动重连…",
+            "warning"
         )
+
+        # 启动自动重连流程
+        if not self.is_simulate and port:
+            self._reconnecting = True
+            self._reconnect_attempts = 0
+            self._try_reconnect()
+
+    def _try_reconnect(self) -> None:
+        """自动重连尝试：周期性检测端口可用性并尝试重新连接。"""
+        # 已成功重连或用户手动断开 → 停止重连
+        if not self._reconnecting:
+            return
+
+        # 超过最大重连次数 → 放弃，恢复按钮供用户手动操作
+        if self._reconnect_attempts >= config.RECONNECT_MAX_RETRIES:
+            self._reconnecting = False
+            self.status_label.config(text="重连失败，请手动连接", fg=_DANGER)
+            self.toast_manager.show("自动重连失败，请手动点击「连接」", "error")
+            self.connect_btn.config(state=tk.NORMAL)
+            return
+
+        self._reconnect_attempts += 1
+
+        # 自动刷新端口列表，检测设备是否重新出现
+        if config.RECONNECT_REFRESH_PORTS:
+            self.refresh_ports()
+
+        # 尝试找到原端口或任意可用端口
+        port = self._reconnect_port
+        ports = list(self.port_combo['values']) if self.port_combo['values'] else []
+
+        # 原端口不存在时，尝试使用第一个可用端口
+        if port not in ports and ports:
+            port = ports[0]
+
+        # 没有可用端口 → 继续等待下次尝试
+        if not ports:
+            self.status_label.config(
+                text=f"正在重连… ({self._reconnect_attempts}/{config.RECONNECT_MAX_RETRIES})",
+                fg="#c47a1a"
+            )
+            self.master.after(config.RECONNECT_INTERVAL_MS, self._try_reconnect)
+            return
+
+        # 尝试打开串口（仅探测端口是否可用，不做完整连接）
+        try:
+            test_driver = ScaleDriver(port=port, baud=self._reconnect_baud)
+            test_driver.open()
+            # 成功打开 → 立即关闭并等待短暂间隔确保句柄释放
+            test_driver.close()
+        except ScaleConnectionError:
+            # 端口不可用 → 继续等待下次尝试
+            self.status_label.config(
+                text=f"正在重连… ({self._reconnect_attempts}/{config.RECONNECT_MAX_RETRIES})",
+                fg="#c47a1a"
+            )
+            self.master.after(config.RECONNECT_INTERVAL_MS, self._try_reconnect)
+            return
+
+        # 端口可用 → 设置 combobox，短暂延迟后调用 connect()
+        # （延迟确保 Windows 释放 test_driver 的串口句柄）
+        self.port_combo.set(port)
+        self._reconnecting = True  # connect() 中会检测并通知重连成功
+        self.master.after(200, self.connect)
 
     def _update_state_badge(self, state: str) -> None:
         if state == "WEIGHING":
@@ -916,6 +1070,8 @@ class WeightApp:
 
     # ============= 退出 =============
     def on_closing(self) -> None:
+        # 取消自动重连，防止退出后回调仍在运行
+        self._reconnecting = False
         if self.driver is not None:
             try:
                 self.driver.close()
