@@ -11,9 +11,9 @@ from app import WeightApp
 
 def main() -> None:
     root = tk.Tk()
-    # 全局设置仿宋字体
+    # Apple 风格：使用更现代的字体
     try:
-        root.option_add("*Font", "仿宋 10")
+        root.option_add("*Font", ("Microsoft YaHei", 10))
     except tk.TclError:
         pass
     app = WeightApp(root)
