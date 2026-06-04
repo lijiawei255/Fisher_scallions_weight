@@ -182,73 +182,10 @@ class ToastManager:
         toast.after(duration, dismiss)
 
 
-# ==================== 按钮涟漪效果 ====================
-def _create_ripple(btn: tk.Button) -> None:
-    """在按钮位置创建扩散涟漪效果。
-
-    涟漪 Label 会覆盖在按钮上方，截获鼠标释放事件导致 Button.command 不触发。
-    解决方案：绑定鼠标事件到涟漪并转发给按钮，让按钮的 command 正常执行。
-    """
-    parent = btn.master
-    btn.update_idletasks()
-
-    x, y = btn.winfo_x(), btn.winfo_y()
-    w, h = btn.winfo_width(), btn.winfo_height()
-
-    # 创建涟漪 Label（初始很小，在按钮中心）
-    ripple = tk.Label(parent, bg="#34d399", relief=tk.FLAT, bd=0)
-    ripple.place(x=x + w // 2, y=y + h // 2, width=0, height=0)
-
-    # 关键修复：涟漪 Label 截获鼠标事件 → 转发给按钮，保证 command 触发
-    def _forward_to_btn(event, b=btn) -> None:
-        try:
-            b.event_generate(
-                event.type,
-                x=event.x_root - b.winfo_rootx(),
-                y=event.y_root - b.winfo_rooty(),
-                rootx=event.x_root,
-                rooty=event.y_root,
-            )
-        except tk.TclError:
-            pass  # 按钮已销毁
-
-    for ev_type in ("<ButtonRelease-1>", "<Motion>", "<Leave>"):
-        ripple.bind(ev_type, _forward_to_btn)
-
-    def animate(step: int = 0) -> None:
-        if step >= 10:
-            try:
-                ripple.destroy()
-            except tk.TclError:
-                pass  # 窗口已销毁
-            return
-
-        scale = step / 10
-        new_size = int(min(w, h) * scale * 2.5)
-        new_x = x + w // 2 - new_size // 2
-        new_y = y + h // 2 - new_size // 2
-
-        # 颜色从亮绿渐变到背景色
-        r = int(52 + (240 - 52) * (step / 10))
-        g = int(211 + (253 - 211) * (step / 10))
-        b = int(153 + (244 - 153) * (step / 10))
-        color = f"#{r:02x}{g:02x}{b:02x}"
-
-        try:
-            ripple.config(bg=color)
-            ripple.place(x=new_x, y=new_y, width=new_size, height=new_size)
-        except tk.TclError:
-            return  # 窗口已销毁，停止动画
-
-        parent.after(30, lambda: animate(step + 1))
-
-    animate()
-
-
 # ==================== 药丸按钮工具 ====================
 def style_pill_button(btn: tk.Button, bg: str = _PRIMARY, fg: str = "white",
                      hover_bg: str = _PRIMARY_DARK, active_bg: str = _PRIMARY_DARK) -> None:
-    """将 tk.Button 配置为 Apple 药丸风格，并添加悬停/按下/涟漪效果。"""
+    """将 tk.Button 配置为 Apple 药丸风格，并添加悬停/按下缩放效果。"""
     original_font = ("Microsoft YaHei", 12, "bold")
     small_font = ("Microsoft YaHei", 11, "bold")
     original_padx, original_pady = 24, 8
@@ -271,7 +208,6 @@ def style_pill_button(btn: tk.Button, bg: str = _PRIMARY, fg: str = "white",
 
     def on_press(event, b=btn):
         b.config(font=small_font, padx=small_padx, pady=small_pady)
-        _create_ripple(b)
 
     def on_release(event, b=btn):
         b.config(font=original_font, padx=original_padx, pady=original_pady)
@@ -304,7 +240,6 @@ def _update_button_appearance(btn: tk.Button, bg: str, hover_bg: str,
 
     def on_press(event):
         btn.config(font=small_font, padx=small_padx, pady=small_pady)
-        _create_ripple(btn)
 
     def on_release(event):
         btn.config(font=original_font, padx=original_padx, pady=original_pady)
